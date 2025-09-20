@@ -1,5 +1,7 @@
 <?php
 /**
+ * Require authentication to view WordPress content.
+ *
  * @package cog-log-ing
  * @version 0.0.1
  */
