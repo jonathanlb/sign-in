@@ -1,0 +1,23 @@
+.cog-log-ing-error {
+    color: #444;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-bottom: 1em;
+    font-weight: bold;
+    text-align: center;
+}
+
+.cog-log-ing-login {
+    max-width: 20em;
+    margin: 0 auto;
+    padding: 1em;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+}
+
+.cog-log-ing-label-input-pair {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.5em;
+}
