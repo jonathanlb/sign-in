@@ -2,15 +2,15 @@
 /**
  * Require authentication to view WordPress content.
  *
- * @package cog-log-ing
- * @version 0.0.1
+ * @package sign-in
+ * @version 0.0.2
  */
 
 /*
-Plugin Name: cog-log-ing
+Plugin Name: sign-in
 Plugin URI: https://github.com/jonathanlb
 Description: Provide authenticated access to WP content.
-Version: 0.0.1
+Version: 0.0.2
 Author: Jonathan Bredin
 Author URI: https://bredin.org
 License: https://www.gnu.org/licenses/gpl-3.0.txt GPLv3
@@ -23,11 +23,10 @@ if ( ! function_exists( 'add_action' ) ) {
 }
 
 require 'vendor/autoload.php';
-define( 'COG_LOG_ING__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'SIGN_IN__PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+require_once SIGN_IN__PLUGIN_DIR . 'class-sign-in.php';
 
-register_activation_hook( __FILE__, array( 'Cog_Log_Ing', 'plugin_activation' ) );
-register_deactivation_hook( __FILE__, array( 'Cog_Log_Ing', 'plugin_deactivation' ) );
+register_activation_hook( __FILE__, array( 'Sign_In', 'plugin_activation' ) );
+register_deactivation_hook( __FILE__, array( 'Sign_In', 'plugin_deactivation' ) );
 
-require_once COG_LOG_ING__PLUGIN_DIR . 'class-cog-log-ing.php';
-
-add_action( 'init', array( 'Cog_Log_Ing', 'init' ) );
+add_action( 'init', array( 'Sign_In', 'init' ) );

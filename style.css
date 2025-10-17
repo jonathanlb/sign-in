@@ -1,4 +1,4 @@
-.cog-log-ing-error {
+.sign-in--error {
     color: #444;
     border: 1px solid #ccc;
     border-radius: 5px;
@@ -7,7 +7,7 @@
     text-align: center;
 }
 
-.cog-log-ing-login {
+.sign-in-login {
     max-width: 20em;
     margin: 0 auto;
     padding: 1em;
@@ -16,7 +16,7 @@
     background-color: #f9f9f9;
 }
 
-.cog-log-ing-label-input-pair {
+.sign-in-label-input-pair {
     display: flex;
     flex-direction: column;
     margin-bottom: 0.5em;

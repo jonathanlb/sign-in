@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "wp-env-start": "wp-env start tests-cli",
+    "wp-env-stop": "wp-env stop tests-cli",
+    "lint": "./vendor/bin/phpcbf --standard=WordPress *.php tests/Sign_In_Test.php",
+    "sniff": "./vendor/bin/phpcs --standard=WordPress *.php tests/Sign_In_Test.php",
+    "test": "wp-env run tests-cli --env-cwd=wp-content/plugins/sign-in ./vendor/bin/phpunit tests/Sign_In_Test.php"
+  },
+  "devDependencies": {
+    "@wordpress/env": "^10.32.0"
+  }
+}
