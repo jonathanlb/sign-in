@@ -2,8 +2,11 @@
 /**
  * Require authentication to view WordPress content.
  *
- * @package sign-in
- * @version 0.0.2
+ * @package    sign-in
+ * @author     Jonathan Bredin <bredin@acm.org>
+ * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
+ * @link       https://github.com/jonathanlb/sign-in
+ * @version    0.0.2
  */
 
 /*
