@@ -13,7 +13,14 @@
 use Aws\CognitoIdentityProvider\CognitoIdentityProviderClient;
 use Aws\Credentials\CredentialProvider;
 
+define( 'COOKIE_SALT', 'FwAlpiSjsb' );
+define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . COOKIE_SALT );
+define( 'PASSWORD_COOKIE_NAME', 'sign_in_password_' . COOKIE_SALT );
 define( 'SHORTCODE_PREFIX', 'sign_in_require_auth' );
+define( 'TOKEN_EXPIRY_SECONDS', 90 );
+// define( 'TOKEN_EXPIRY_SECONDS', 14000 );
+define( 'USER_NAME_COOKIE_NAME', 'sign_in_user_name_' . COOKIE_SALT );
+define( 'USER_NAME_EXPIRY_SECONDS', 120 ); // just long enough to do the redirect after login form submission.
 
 /**
  * Handle AWS configuration, user validation, and replacing
@@ -261,12 +268,13 @@ class Sign_In {
 
 		// Check if token is in URL and valid, removing the login shortcode if so,
 		// otherwise redirect to the same page for login.
-		// XXX: TODO: store these in arg or cookies instead of URL
-		$token = get_query_var( 'token', null );
+		$token = $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ?? null;
 		if ( $token ) {
 			if ( self::validate_token( $token, $aws_opts ) ) {
 				return str_replace( '[' . $shortcode . ']', '', $content );
-			} elseif ( false === $token ) {
+			} else {
+				unset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] );
+				setcookie( AUTH_TOKEN_COOKIE_NAME, '', 1, '/' );
 				wp_redirect( get_permalink( get_the_ID() ) );
 				exit();
 			}
@@ -274,13 +282,19 @@ class Sign_In {
 
 		// Check if user_name and password are in URL and valid.
 		// If so, generate token and redirect.
-		// XXX: TODO: store these in arg or cookies instead of URL
-		$user_name = get_query_var( 'user_name', null );
-		$password  = get_query_var( 'password', null );
-		$token     = self::authenticate_user( $user_name, $password, $aws_opts );
+		$user_name = $_COOKIE[ USER_NAME_COOKIE_NAME ] ?? null;
+
+		$password = $_COOKIE[ PASSWORD_COOKIE_NAME ] ?? null;
+		$token    = self::authenticate_user( $user_name, $password, $aws_opts );
+		// Clean up cookies.
+		unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
+		unset( $_COOKIE[ PASSWORD_COOKIE_NAME ] );
+		setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
+		setcookie( PASSWORD_COOKIE_NAME, '', 1, '/' );
 		if ( null !== $token ) {
+			setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
 			$result = get_permalink( get_the_ID() );
-			wp_redirect( $result . '?token=' . $token );
+			wp_redirect( $result );
 			exit();
 		}
 
@@ -289,9 +303,9 @@ class Sign_In {
 		if ( $user_name || $password ) {
 			$login_msg = 'Invalid login';
 		}
-		if ( $aws_opts['client_id'] === '' ) {
+		if ( '' === $aws_opts['client_id'] ) {
 			$login_msg = 'Plugin not configured with AWS Client ID';
-		} elseif ( $aws_opts['user_pool_id'] === '' ) {
+		} elseif ( '' === $aws_opts['user_pool_id'] ) {
 			$login_msg = 'Plugin not configured with Cognito User Pool ID';
 		}
 		$start_pos = strpos( $content, SHORTCODE_PREFIX );
@@ -308,7 +322,7 @@ class Sign_In {
 	 *
 	 * @return object AWS configuration from user-settings DB.
 	 */
-	static function get_aws_opts( $shortcode ) {
+	public static function get_aws_opts( $shortcode ) {
 		$options = get_option( 'sign_in_settings' );
 
 		$profile = $options['aws_credentials_profile'];
@@ -351,6 +365,12 @@ class Sign_In {
 		return $aws_opts;
 	}
 
+	/**
+	 * Get Cognito Identity Provider client.
+	 *
+	 * @param object $aws_opts AWS configuration options used to create the client.
+	 * @return CognitoIdentityProviderClient the Cognito client.
+	 */
 	public static function get_identity_provider_client( $aws_opts ) {
 		$id_provider_client_opts                = array(
 			'client_id'    => $aws_opts['client_id'],
@@ -364,6 +384,13 @@ class Sign_In {
 		return new CognitoIdentityProviderClient( $id_provider_client_opts );
 	}
 
+	/**
+	 * Extract shortcode from content.
+	 * Does not include surrounding [ and ], but does include the shortcode itself and preceeding and trailing whitespace.
+	 *
+	 * @param string $content the post content.
+	 * @return string|null the shortcode found, or null if none.
+	 */
 	public static function get_shortcode_from_content( $content ) {
 		$start_pos = strpos( $content, SHORTCODE_PREFIX );
 		if ( ! $start_pos ) {
@@ -424,23 +451,24 @@ class Sign_In {
 		?>
 <link rel="stylesheet" href="<?php echo esc_html( plugin_dir_url( __FILE__ ) . 'style.css' ); ?>" />
 <form class="sign-in-login"
+	onsubmit="wp_sign_in_handle_submit(event);"
 	action='<?php echo esc_html( get_permalink( get_the_ID() ) ); ?>'>
 	<div class="sign-in-error"><?php echo esc_html( $error_msg ); ?></div>
 	<div class="sign-in-label-input-pair">
-		<label for="user_name">Email:</label>
+		<label for="user_name_wp_sign_in">Email:</label>
 		<input
 			type="text"
-			id="user_name"
+			id="user_name_wp_sign_in"
 			name="user_name"
 			value=""
 			autocomplete="username"
 		/>
 	</div>
 	<div class="sign-in-label-input-pair">
-		<label for="password">Password:</label>
+		<label for="password_wp_sign_in">Password:</label>
 		<input
 			type="password"
-			id="password"
+			id="password_wp_sign_in"
 			name="password"
 			value=""
 			autocomplete="current-password"
@@ -450,6 +478,22 @@ class Sign_In {
 		<input type="submit" value="Log In" />
 	</div>
 </form>
+<script>
+	function wp_sign_in_handle_submit(event) {
+		event.preventDefault();
+		const form = event.target;
+		const user_name = form.user_name.value;
+		const password = form.password.value;
+
+		const expiryDate = new Date();
+		expiryDate.setTime(expiryDate.getTime() + (<?php echo number_format( USER_NAME_EXPIRY_SECONDS ); ?> * 1000));
+		const expires = "expires=" + expiryDate.toUTCString();
+
+		document.cookie = "<?php echo USER_NAME_COOKIE_NAME; ?>=" + encodeURIComponent(user_name) + ";" + expires + ";path=/";
+		document.cookie = "<?php echo PASSWORD_COOKIE_NAME; ?>=" + encodeURIComponent(password) + ";" + expires + ";path=/";
+		window.location.href = form.action;
+	}
+</script>
 		<?php
 		return ob_get_clean();
 	}

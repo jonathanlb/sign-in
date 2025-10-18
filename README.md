@@ -31,3 +31,8 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
   - `npm run wp-env-start`
   - `npm t` # ad nausea...
   - `npm run wp-env-stop`
+
+## TODOs
+
+- Provide [reset password functionality.](https://docs.aws.amazon.com/aws-sdk-php/v3/api/api-cognito-idp-2016-04-18.html#forgotpassword)
+- Provide log out button.
