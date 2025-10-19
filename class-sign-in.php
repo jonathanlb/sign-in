@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.2
+ * @version    0.0.3
  * @since      0.0.1
  */
 
@@ -17,8 +17,7 @@ define( 'COOKIE_SALT', 'FwAlpiSjsb' );
 define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . COOKIE_SALT );
 define( 'PASSWORD_COOKIE_NAME', 'sign_in_password_' . COOKIE_SALT );
 define( 'SHORTCODE_PREFIX', 'sign_in_require_auth' );
-define( 'TOKEN_EXPIRY_SECONDS', 90 );
-// define( 'TOKEN_EXPIRY_SECONDS', 14000 );
+define( 'TOKEN_EXPIRY_SECONDS', 14000 );
 define( 'USER_NAME_COOKIE_NAME', 'sign_in_user_name_' . COOKIE_SALT );
 define( 'USER_NAME_EXPIRY_SECONDS', 120 ); // just long enough to do the redirect after login form submission.
 
@@ -46,7 +45,7 @@ class Sign_In {
 	 *
 	 * @var string unused locally version number.
 	 */
-	private static $version = '0.0.2';
+	private static $version = '0.0.3';
 
 	/**
 	 * Initialize the plugin
