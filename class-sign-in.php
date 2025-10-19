@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.3
+ * @version    0.0.4
  * @since      0.0.1
  */
 
@@ -15,6 +15,7 @@ use Aws\Credentials\CredentialProvider;
 
 define( 'COOKIE_SALT', 'FwAlpiSjsb' );
 define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . COOKIE_SALT );
+define( 'LOGOUT_SHORTCODE', 'sign_in_logout' );
 define( 'PASSWORD_COOKIE_NAME', 'sign_in_password_' . COOKIE_SALT );
 define( 'SHORTCODE_PREFIX', 'sign_in_require_auth' );
 define( 'TOKEN_EXPIRY_SECONDS', 14000 );
@@ -270,8 +271,7 @@ class Sign_In {
 		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
 			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
 			if ( self::validate_token( $token, $aws_opts ) ) {
-				// TODO: replace logout shortcode in content here.
-				return str_replace( '[' . $shortcode . ']', '', $content );
+				return self::render_authenticated_content( $shortcode, $content );
 			} else {
 				unset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] );
 				setcookie( AUTH_TOKEN_COOKIE_NAME, '', 1, '/' );
@@ -282,6 +282,8 @@ class Sign_In {
 
 		// Check if user_name and password are in URL and valid.
 		// If so, generate token and redirect.
+		$user_name = '';
+		$password  = '';
 		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] ) && isset( $_COOKIE[ PASSWORD_COOKIE_NAME ] ) ) {
 			$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
 			$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_SANITIZE_STRING ) );
@@ -315,10 +317,7 @@ class Sign_In {
 		} elseif ( '' === $aws_opts['user_pool_id'] ) {
 			$login_msg = 'Plugin not configured with Cognito User Pool ID';
 		}
-		$start_pos = strpos( $content, SHORTCODE_PREFIX );
-		$result    = substr( $content, 0, $start_pos - 1 ) . self::render_login( $login_msg );
-
-		return $result;
+		return self::render_unauthenticated_content( $content, $login_msg );
 	}
 
 	/**
@@ -448,6 +447,18 @@ class Sign_In {
 	}
 
 	/**
+	 * Render the authenticated content.
+	 *
+	 * @param string $shortcode the shortcode string triggering the request.
+	 * @param string $content the post content.
+	 * @return string the content with login shortcode elided and the logout shortcode replaced with a button.
+	 */
+	public static function render_authenticated_content( $shortcode, $content ) {
+		$result_content = str_replace( '[' . LOGOUT_SHORTCODE . ']', self::render_logout(), $content );
+		return str_replace( '[' . $shortcode . ']', '', $result_content );
+	}
+
+	/**
 	 * Display HTML login form that will redirect to the same page with filled in
 	 * user_name and password parameters.
 	 *
@@ -506,6 +517,33 @@ class Sign_In {
 	}
 
 	/**
+	 * Render the logout shortcode content.
+	 *
+	 * @return string the logout form HTML.
+	 */
+	public static function render_logout() {
+		ob_start();
+		?>
+		<form class="sign-in-logout-form"
+			onsubmit="wp_sign_out_handle_submit(event);"
+			action='<?php echo esc_html( get_permalink( get_the_ID() ) ); ?>'>
+			<input type="submit" value="Log Out" />
+		</form>
+		<script>
+			function wp_sign_out_handle_submit(event) {
+				event.preventDefault();
+				const form = event.target;
+				document.cookie = "<?php echo esc_attr( AUTH_TOKEN_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
+				document.cookie = "<?php echo esc_attr( USER_NAME_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
+				document.cookie = "<?php echo esc_attr( PASSWORD_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
+				window.location.href = form.action;
+			}
+		</script>
+		<?php
+		return ob_get_clean();
+	}
+
+	/**
 	 * Build the plugin settings page.
 	 */
 	public static function render_settings_page() {
@@ -527,6 +565,20 @@ class Sign_In {
 
 </div><!-- /.wrap -->
 		<?php
+	}
+
+	/**
+	 * Render the unauthenticated content with login form.
+	 *
+	 * @param string $content the post content.
+	 * @param string $login_msg message to display above the login form.
+	 * @return string the content with login form replacing the protected content.
+	 */
+	public static function render_unauthenticated_content( $content, $login_msg ) {
+		$start_pos = strpos( $content, SHORTCODE_PREFIX );
+		$result    = substr( $content, 0, $start_pos - 1 ) . self::render_login( $login_msg );
+		$result    = str_replace( '[' . LOGOUT_SHORTCODE . ']', '', $result );
+		return $result;
 	}
 
 	/**

@@ -22,6 +22,8 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
     - `aws_region`
     - `aws_version`
     - `cognito_user_pool_id`
+- You can add a logout button with the shortcode `[sign_in_logout]` to any page containing the `[sign_in_require_auth]` shortcode.
+  - Do not use the logout button on pages not requiring authentication.  The filter will not catch the shortcode and your viewers will see it.
 
 ## Maintainence
 
@@ -35,4 +37,3 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
 ## TODOs
 
 - Provide [reset password functionality.](https://docs.aws.amazon.com/aws-sdk-php/v3/api/api-cognito-idp-2016-04-18.html#forgotpassword)
-- Provide log out button.
