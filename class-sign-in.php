@@ -268,9 +268,10 @@ class Sign_In {
 
 		// Check if token is in URL and valid, removing the login shortcode if so,
 		// otherwise redirect to the same page for login.
-		$token = $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ?? null;
-		if ( $token ) {
+		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
+			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
 			if ( self::validate_token( $token, $aws_opts ) ) {
+				// TODO: replace logout shortcode in content here.
 				return str_replace( '[' . $shortcode . ']', '', $content );
 			} else {
 				unset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] );
@@ -282,20 +283,27 @@ class Sign_In {
 
 		// Check if user_name and password are in URL and valid.
 		// If so, generate token and redirect.
-		$user_name = $_COOKIE[ USER_NAME_COOKIE_NAME ] ?? null;
+		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] ) && isset( $_COOKIE[ PASSWORD_COOKIE_NAME ] ) ) {
+			$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
+			$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_SANITIZE_STRING ) );
+			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) === false ) {
+				echo '<script>console.error("Invalid email: ' . esc_js( $user_name ) . '")</script>';
+				$user_name = null;
+			}
 
-		$password = $_COOKIE[ PASSWORD_COOKIE_NAME ] ?? null;
-		$token    = self::authenticate_user( $user_name, $password, $aws_opts );
-		// Clean up cookies.
-		unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-		unset( $_COOKIE[ PASSWORD_COOKIE_NAME ] );
-		setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
-		setcookie( PASSWORD_COOKIE_NAME, '', 1, '/' );
-		if ( null !== $token ) {
-			setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-			$result = get_permalink( get_the_ID() );
-			wp_redirect( $result );
-			exit();
+			// Clean up cookies.
+			unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
+			unset( $_COOKIE[ PASSWORD_COOKIE_NAME ] );
+			setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
+			setcookie( PASSWORD_COOKIE_NAME, '', 1, '/' );
+
+			$token = self::authenticate_user( $user_name, $password, $aws_opts );
+			if ( null !== $token ) {
+				setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
+				$result = get_permalink( get_the_ID() );
+				wp_redirect( $result );
+				exit();
+			}
 		}
 
 		// Otherwise, render login form with instruction or error message.
@@ -489,8 +497,8 @@ class Sign_In {
 		expiryDate.setTime(expiryDate.getTime() + (<?php echo number_format( USER_NAME_EXPIRY_SECONDS ); ?> * 1000));
 		const expires = "expires=" + expiryDate.toUTCString();
 
-		document.cookie = "<?php echo USER_NAME_COOKIE_NAME; ?>=" + encodeURIComponent(user_name) + ";" + expires + ";path=/";
-		document.cookie = "<?php echo PASSWORD_COOKIE_NAME; ?>=" + encodeURIComponent(password) + ";" + expires + ";path=/";
+		document.cookie = "<?php echo esc_attr( USER_NAME_COOKIE_NAME ); ?>=" + encodeURIComponent(user_name) + ";" + expires + ";path=/";
+		document.cookie = "<?php echo esc_attr( PASSWORD_COOKIE_NAME ); ?>=" + encodeURIComponent(password) + ";" + expires + ";path=/";
 		window.location.href = form.action;
 	}
 </script>
