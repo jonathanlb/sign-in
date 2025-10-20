@@ -286,7 +286,7 @@ class Sign_In {
 		$password  = '';
 		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] ) && isset( $_COOKIE[ PASSWORD_COOKIE_NAME ] ) ) {
 			$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
-			$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_SANITIZE_STRING ) );
+			$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) === false ) {
 				echo '<script>console.error("Invalid email: ' . esc_js( $user_name ) . '")</script>';
 				$user_name = null;
