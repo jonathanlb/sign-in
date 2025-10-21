@@ -131,4 +131,32 @@ class Sign_In_Test extends WP_UnitTestCase {
 		$opts      = Sign_In::get_aws_opts( $shortcode );
 		$this->assertEquals( 'custom', $opts['user_pool_id'] );
 	}
+
+	public function test_filter_status_through_login_flow(): void {
+		$aws_opts = Sign_In::get_aws_opts( 'sign_in_require_auth' );
+		$status = Sign_In::get_filter_status( $aws_opts );
+		$this->assertEquals( FilterStatus::UNAUTHENTICATED, $status );
+
+		$_COOKIE[ USER_NAME_COOKIE_NAME ] = 'testuser';
+		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = PASSWORD_RESET_COOKIE_VALUE;
+		$status = Sign_In::get_filter_status( $aws_opts );
+		$this->assertEquals( FilterStatus::FORGOT_PASSWORD, $status );
+		$this->assertArrayNotHasKey( $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] );
+		$this->assertEquals( 'testuser', $_COOKIE[ USER_NAME_COOKIE_NAME ] );
+
+		$_COOKIE[ USER_NAME_COOKIE_NAME ] = 'testuser';
+		$_COOKIE[ PASSWORD_COOKIE_NAME ] = 'abc123';
+		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = '123456';
+		$status = Sign_In::get_filter_status( $aws_opts );
+		$this->assertEquals( FilterStatus::RESET_PASSWORD, $status );
+		$this->assertEquals( 'testuser', $_COOKIE[ USER_NAME_COOKIE_NAME ] );
+		$this->assertEquals( 'abc123', $_COOKIE[ PASSWORD_COOKIE_NAME ] );
+		$this->assertEquals( '123456', $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] );
+
+		$_COOKIE[ USER_NAME_COOKIE_NAME ] = 'testuser';
+		$_COOKIE[ PASSWORD_COOKIE_NAME ] = 'abc123';
+		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = null;
+		$status = Sign_In::get_filter_status( $aws_opts );
+		$this->assertEquals( FilterStatus::AUTHENTICATION_PENDING, $status );
+	}	
 }
