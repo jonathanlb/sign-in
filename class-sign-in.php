@@ -307,8 +307,8 @@ class Sign_In {
 			case FilterStatus::FORGOT_PASSWORD:
 				// Start password reset process.
 				$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
-				unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-				setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
+				self::unset_cookie( USER_NAME_COOKIE_NAME );
+				self::unset_cookie( PASSWORD_RESET_COOKIE_NAME );
 
 				if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 					if ( self::request_reset_password( $aws_opts, $user_name ) ) {
@@ -326,12 +326,9 @@ class Sign_In {
 				$user_name       = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
 				$password        = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
 				$validation_code = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_RESET_CODE_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
-				unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-				setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
-				unset( $_COOKIE[ PASSWORD_COOKIE_NAME ] );
-				setcookie( PASSWORD_COOKIE_NAME, '', 1, '/' );
-				unset( $_COOKIE[ PASSWORD_RESET_CODE_COOKIE_NAME ] );
-				setcookie( PASSWORD_RESET_CODE_COOKIE_NAME, '', 1, '/' );
+				self::unset_cookie( USER_NAME_COOKIE_NAME );
+				self::unset_cookie( PASSWORD_RESET_COOKIE_NAME );
+				self::unset_cookie( PASSWORD_RESET_CODE_COOKIE_NAME );
 
 				if ( self::reset_password( $aws_opts, $user_name, $password, $validation_code ) ) {
 					$login_msg = 'Password reset successful. Please log in:';
@@ -344,10 +341,8 @@ class Sign_In {
 				// Try to authenticate user.
 				$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
 				$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
-				unset( $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-				setcookie( USER_NAME_COOKIE_NAME, '', 1, '/' );
-				unset( $_COOKIE[ PASSWORD_COOKIE_NAME ] );
-				setcookie( PASSWORD_COOKIE_NAME, '', 1, '/' );
+				self::unset_cookie( USER_NAME_COOKIE_NAME );
+				self::unset_cookie( PASSWORD_COOKIE_NAME );
 
 				$token = self::authenticate_user( $user_name, $password, $aws_opts );
 				if ( null !== $token ) {
@@ -362,6 +357,7 @@ class Sign_In {
 			case FilterStatus::UNAUTHENTICATED:
 			default:
 				// Render login form with instruction or error message.
+				self::unset_cookie( AUTH_TOKEN_COOKIE_NAME );
 				if ( '' === $aws_opts['client_id'] ) {
 					$login_msg = 'Plugin not configured with AWS Client ID';
 				} elseif ( '' === $aws_opts['user_pool_id'] ) {
@@ -423,7 +419,7 @@ class Sign_In {
 	}
 
 	/**
-	 * Get the current login state by inspecting and resetting cookies as necessary.
+	 * Get the current login state by inspecting cookies.
 	 *
 	 * @param object $aws_opts AWS configuration options used for authentication.
 	 *
@@ -435,8 +431,6 @@ class Sign_In {
 			if ( self::validate_token( $token, $aws_opts ) ) {
 				return FilterStatus::AUTHENTICATED;
 			} else {
-				unset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] );
-				setcookie( AUTH_TOKEN_COOKIE_NAME, '', 1, '/' );
 				return FilterStatus::UNAUTHENTICATED;
 			}
 		}
@@ -451,8 +445,6 @@ class Sign_In {
 		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] )
 			&& isset( $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] ) ) {
 
-			unset( $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] );
-			setcookie( PASSWORD_RESET_COOKIE_NAME, '', 1, '/' );
 			return FilterStatus::FORGOT_PASSWORD;
 		}
 
@@ -809,6 +801,16 @@ class Sign_In {
 			echo '<script>console.error("Password reset error: ' . esc_js( $e->getMessage() ) . '")</script>';
 			return false;
 		}
+	}
+
+	/**
+	 * Unset a cookie by key.  Abstract mulitple lines and provide point to mock.
+	 *
+	 * @param string $cookie_key the cookie key to unset.
+	 */
+	public static function unset_cookie( $cookie_key ) {
+		unset( $_COOKIE[ $cookie_key ] );
+		setcookie( $cookie_key, '', 1, '/' );
 	}
 
 	/**
