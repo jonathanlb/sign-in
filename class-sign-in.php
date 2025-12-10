@@ -574,7 +574,7 @@ class Sign_In {
 			required="required"
 		/>
 	</div>
-	<div class="sign-in-label-input-pair">
+	<div class="sign-in-label-input-pair" id="password_div_wp_sign_in">
 		<label for="password_wp_sign_in">Password:</label>
 		<input
 			type="password"
@@ -591,11 +591,27 @@ class Sign_In {
 			id="password_forgot_wp_sign_in"
 			name="password_forgot"
 			value="no"
+			onchange="wp_sign_in_handle_password_forgot_change(this)"
 		/>
 	</div>
 		<input type="submit" value="Log In" />
 </form>
 <script>
+	let wp_sign_in_password_pair_display = "flex";
+
+	function wp_sign_in_handle_password_forgot_change(checkbox) {
+		if (checkbox.checked) {
+			checkbox.value = "yes";
+			const div = document.getElementById("password_div_wp_sign_in");
+			wp_sign_in_password_pair_display = div.style.display;
+			div.style.display = "none";
+		} else {
+			checkbox.value = "no";
+			const div = document.getElementById("password_div_wp_sign_in");
+			div.style.display = wp_sign_in_password_pair_display;
+		}
+	}
+
 	function wp_sign_in_handle_submit(event) {
 		event.preventDefault();
 		const form = event.target;
