@@ -308,6 +308,9 @@ error_log("init called, adding post handler"); // XXX remove
 				case 'invalid_email':
 					$login_msg = 'Invalid email address.';
 					break;
+				case 'password_reset_requested':
+					$login_msg = 'Password reset requested. Check your email for the reset code.';
+					break;
 				default:
 					$login_msg = 'Please log in...';
 					break;
@@ -439,10 +442,32 @@ error_log("nonce verification failed " . (string)isset( $_POST['sign_in_auth_non
 		if (isset($_POST['password'])) {
 				$password = sanitize_text_field( $_POST['password'] );
 		}
-error_log( $user_name . ' ' . $forgot_password . ' ' . $password ); // XXX remove
+		$new_password = '';
+		if (isset($_POST['new_password'])) {
+				$new_password = sanitize_text_field( $_POST['new_password'] );
+		}
+error_log( $user_name . ' ' . $forgot_password . ' ' . $password . ' ' . $new_password ); // XXX remove
 
 		$aws_opts  = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
-		if ($forgot_password === 'yes') {
+		if ($new_password !== '') {
+			// handle new password request
+			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
+				if ( self::reset_password( $aws_opts, $user_name, $new_password, $password ) ) {
+					$token = self::authenticate_user( $user_name, $new_password, $aws_opts );
+					setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
+					wp_redirect( $slug );
+					exit();
+				} else {
+					error_log("password reset failed");
+					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+					exit();
+				}
+			 } else {
+				error_log("invalid email for user password reset: " . $user_name);
+				wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+				exit();
+			}
+		} elseif ($forgot_password === 'yes') {
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
 error_log("password reset requested");
@@ -558,7 +583,9 @@ error_log("invalid email for password reset: " . $user_name);
 		/>
 	</div>
 	<div class="sign-in-label-input-pair" id="password_div_wp_sign_in">
-		<label for="password_wp_sign_in">Password:</label>
+		<label for="password_wp_sign_in">
+			<?php str_starts_with($error_msg, 'Password reset') ? esc_html_e( 'Temporary ', 'text-domain' ) : ''; ?>
+			Password:</label>
 		<input
 			type="password"
 			id="password_wp_sign_in"
@@ -567,6 +594,24 @@ error_log("invalid email for password reset: " . $user_name);
 			autocomplete="current-password"
 		/>
 	</div>
+
+	<?php if ( str_starts_with($error_msg, 'Password reset') ): ?> 
+		<div class="sign-in-label-input-pair" id="new_password_div_wp_sign_in">
+			<label for="new_password_wp_sign_in">New Password:</label>
+			<input
+				type="password"
+				id="new_password_wp_sign_in"
+				name="new_password"
+				value=""
+				minlength="8"
+        		pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*\W|_).{8,}"
+        		title="Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters"
+				required="required"
+				autocomplete="new-password"
+			/>
+		</div>
+	<?php endif; ?>
+
 	<div class="sign-in-label-checkbox-pair">
 		<label for="password_forgot_wp_sign_in">Forgot Password:</label>
 		<input
@@ -576,6 +621,8 @@ error_log("invalid email for password reset: " . $user_name);
 			value="no"
 			onchange="wp_sign_in_handle_password_forgot_change(this)"
 		/>
+		<hr>
+		<i>A password reset code will be sent to your email.</i>
 	</div>
 		<input type="submit" value="Log In" />
 </form>
@@ -585,13 +632,23 @@ error_log("invalid email for password reset: " . $user_name);
 	function wp_sign_in_handle_password_forgot_change(checkbox) {
 		if (checkbox.checked) {
 			checkbox.value = "yes";
-			const div = document.getElementById("password_div_wp_sign_in");
+			let div = document.getElementById("password_div_wp_sign_in");
 			wp_sign_in_password_pair_display = div.style.display;
 			div.style.display = "none";
+
+			div = document.getElementById("password_div_wp_sign_in");
+			if (div) {
+				div.style.display = "none";
+			}
 		} else {
 			checkbox.value = "no";
-			const div = document.getElementById("password_div_wp_sign_in");
+			let div = document.getElementById("password_div_wp_sign_in");
 			div.style.display = wp_sign_in_password_pair_display;
+
+			div = document.getElementById("new_password_div_wp_sign_in");
+			if (div) {
+				div.style.display = "none";
+			}
 		}
 	}
 </script>
@@ -682,74 +739,13 @@ error_log("invalid email for password reset: " . $user_name);
 			$cognito->forgotPassword( $reset_opts );
 			return true;
 		} catch ( Exception $e ) {
-			echo '<script>console.error("Password reset error: ' . esc_js( $e->getMessage() ) . '")</script>';
+			// e.g. user's email not verified
+			error_log("password reset error for " . $user_name . " : " . $e->getMessage());
 			return false;
 		}
 	}
 
-	public static function render_password_reset() {
-		ob_start();
-		?>
-<link rel="stylesheet" href="<?php echo esc_html( plugin_dir_url( __FILE__ ) . 'style.css' ); ?>" />
-<form class="sign-in-login"
-	onsubmit="wp_sign_in_handle_password_reset_submit(event);"
-	action='<?php echo esc_html( get_permalink( get_the_ID() ) ); ?>'>
-	<div class="sign-in-info"><b>A password reset code has been sent to you.</b></div>
-	<div class="sign-in-label-input-pair">
-		<label for="validation_code_wp_sign_in">Validation Code:</label>
-		<input
-			type="text"
-			id="validation_code_wp_sign_in"
-			name="validation_code"
-			value=""
-			required="required"
-		/>
-	</div>
-	<div class="sign-in-label-input-pair">
-		<label for="password_wp_sign_in">Password:</label>
-		<input
-			type="password"
-			id="password_wp_sign_in"
-			name="password"
-			value=""
-			required="required"
-		/>
-	</div>
-	<input type="submit" value="Reset Password" />
-</form>
-<script>
-	function wp_sign_in_handle_password_reset_submit(event) {
-		event.preventDefault();
-		const form = event.target;
-		const validationCode = form.validation_code.value.trim();
-		const password = form.password.value.trim();
-		if (password.length < 8 ||
-			!(/[a-z]/.test(password)) ||
-			!(/[A-Z]/.test(password)) ||
-			!(/[0-9]/.test(password)) ||
-			!(/[^A-Za-z0-9]/.test(password))) {
-			window.alert(
-				"Password must include at least 8 characters, one uppercase " +
-				"letter, one lowercase letter, one number, and one special " +
-				"character.");
-			return;
-		}	
-
-		const expiryDate = new Date();
-		expiryDate.setTime(expiryDate.getTime() +
-			(<?php echo number_format( USER_NAME_EXPIRY_SECONDS ); ?> * 1000));
-		const expires = "expires=" + expiryDate.toUTCString();
-		document.cookie = "<?php echo esc_attr( PASSWORD_COOKIE_NAME ); ?>=" +
-			encodeURIComponent(password) + ";" + expires + ";path=/";
-		document.cookie = "<?php echo esc_attr( PASSWORD_RESET_CODE_COOKIE_NAME ); ?>=" +
-			encodeURIComponent(validationCode) + ";" + expires + ";path=/";
-
-		window.location.href = form.action;
-	}
-</script>
-		<?php
-		return ob_get_clean();
-	}
+	
 
 	/**
 	 * Perform password reset for user, given validation code and new password.
@@ -773,19 +769,9 @@ error_log("invalid email for password reset: " . $user_name);
 			$cognito->confirmForgotPassword( $reset_opts );
 			return true;
 		} catch ( Exception $e ) {
-			echo '<script>console.error("Password reset error: ' . esc_js( $e->getMessage() ) . '")</script>';
+			error_log("password reset error: " . $user_name . " : " . $e->getMessage());
 			return false;
 		}
-	}
-
-	/**
-	 * Unset a cookie by key.  Abstract mulitple lines and provide point to mock.
-	 *
-	 * @param string $cookie_key the cookie key to unset.
-	 */
-	public static function unset_cookie( $cookie_key ) {
-		unset( $_COOKIE[ $cookie_key ] );
-		setcookie( $cookie_key, '', 1, '/' );
 	}
 
 	/**
