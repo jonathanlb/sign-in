@@ -5,6 +5,7 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
 
 ## Setup
 
+- Download the sign-in plugin to your plugins directory, e.g. `wp-content/plugins/sign-in`
 - Create a AWS user pool and client id.
 ```
 aws cognito-idp create-user-pool --pool-name POOL_NAME \
@@ -20,21 +21,28 @@ aws cognito-idp create-user-pool-client --user-pool-id POOL_NAME \
 ```
   - Enter the user pool and client ids on the Sign In Settings page.
   - If you're using the AWS web console, make sure that the client id has user-password authentication enabled.
-- Download the sign-in plugin to your plugins directory, e.g. `wp-content/plugins/sign-in`
+- Create an IAM user with permission to list users.  Download the user's AWS access key id and secret access key and save them in `wp-content/plugins/sign-in/credentials` .
+The only permission required is
+```
+{
+	"Version": "2012-10-17",
+	"Statement": [
+		{
+			"Effect": "Allow",
+			"Action": [
+				"cognito-idp:ListUsers"
+			],
+			"Resource": "<user-pool-arn>"
+		}
+	]
+}
+```
 - Navigate your browser to your site's WordPress dashboard and activate the sign-in plugin.
 - From the WordPress dashboard, select "Settings -> sign-in"
-  - Enter the path, either relative to the `sign-in` plugin directory or absolute to your AWS credentials file.  If you don't specify a filename, sign-in will attempt to read a file called `credentials` in its plugin directory.
-  - Enter the security profile name.  If none is specified, sign-in will use `default`.
-  - Fill in the client and user-pool ids from the first step.
+  - Enter the security profile name for the AWS access key and secret when you created the AWS user.
+  - Fill in the client and user-pool ids from the second step.
 - Create a page with content `[sign_in_require_auth]`
   - All content following the brackets will filtered out and replaced with a login dialog unless the user successfully authenticates with an email and password stored by Cognito.
-  - You can override the settings set in the dashboard with tags inside the shortcode:
-    - `aws_credentials_path`
-    - `aws_client_id`
-    - `aws_profile`
-    - `aws_region`
-    - `aws_version`
-    - `cognito_user_pool_id`
 - You can add a logout button with the shortcode `[sign_in_logout]` to any page containing the `[sign_in_require_auth]` shortcode.
   - Do not use the logout button on pages not requiring authentication.  The filter will not catch the shortcode and your viewers will see it.
 - For testing, we use the @wordpress/env npm package.
