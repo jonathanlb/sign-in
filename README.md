@@ -1,13 +1,26 @@
 # sign-in: Cognito authentication for WordPress
 
 Protect WordPress content behind a shortcode tag and authenticate using AWS Cognito.
+** Absolutely no warranty or guarantee is provided with this software.  Use at your own risk! **
 
 ## Setup
+
 - Create a AWS user pool and client id.
-  - Make sure that the client id has user-password authentication enabled.
+```
+aws cognito-idp create-user-pool --pool-name POOL_NAME \
+    --username-attributes "email" \
+    --username-attributes "email" \
+    --query 'UserPool.Id'
+aws cognito-idp create-user-pool-client --user-pool-id POOL_NAME \
+    --client-name CLIENT_NAME \
+    --refresh-token-validity 90 \
+    --read-attributes email \
+    --explicit-auth-flows ALLOW_USER_PASSWORD_AUTH ALLOW_REFRESH_TOKEN_AUTH \
+    --enable-token-revocation
+```
+  - Enter the user pool and client ids on the Sign In Settings page.
+  - If you're using the AWS web console, make sure that the client id has user-password authentication enabled.
 - Download the sign-in plugin to your plugins directory, e.g. `wp-content/plugins/sign-in`
-  - From the plugin directory, run `npm i`
-  - I'm sure I've forgotten all the steps to set up [wp-env](https://www.npmjs.com/package/@wordpress/env), but make sure Docker is running...
 - Navigate your browser to your site's WordPress dashboard and activate the sign-in plugin.
 - From the WordPress dashboard, select "Settings -> sign-in"
   - Enter the path, either relative to the `sign-in` plugin directory or absolute to your AWS credentials file.  If you don't specify a filename, sign-in will attempt to read a file called `credentials` in its plugin directory.
@@ -24,6 +37,9 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
     - `cognito_user_pool_id`
 - You can add a logout button with the shortcode `[sign_in_logout]` to any page containing the `[sign_in_require_auth]` shortcode.
   - Do not use the logout button on pages not requiring authentication.  The filter will not catch the shortcode and your viewers will see it.
+- For testing, we use the @wordpress/env npm package.
+  - From the plugin directory, run `npm i`
+  - I'm sure I've forgotten all the steps to set up [wp-env](https://www.npmjs.com/package/@wordpress/env), but make sure Docker is running...
 
 ## Maintainence
 
