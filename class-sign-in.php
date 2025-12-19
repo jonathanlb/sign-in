@@ -27,33 +27,6 @@ define( 'USER_NAME_COOKIE_NAME', 'sign_in_user_name_' . COOKIE_SALT );
 define( 'USER_NAME_EXPIRY_SECONDS', 120 ); // just long enough to do the redirect after login form submission.
 
 /**
- * Authentication status relative to content filtering.
- */
-enum FilterStatus {
-	/** User is authenticated, there is a valid auth token in cookies. */
-	case AUTHENTICATED;
-
-	/** User has submitted a username and password, but we have not authenticated them. */
-	case AUTHENTICATION_PENDING;
-
-	/**
-	 * User is not authenticated and has submitted a password reset request,
-	 * but this process has yet to submit reset or present prompt for access
-	 * code and new password.
-	 */
-	case FORGOT_PASSWORD;
-
-	/**
-	 *  User is not authenticated but has submitted temporary access code and new password.
-	 *  This process must perform reset and redirect to login.
-	 */
-	case RESET_PASSWORD;
-
-	/** User is not authenticated, no valid auth token in cookies. */
-	case UNAUTHENTICATED;
-}
-
-/**
  * Handle AWS configuration, user validation, and replacing
  * protected content with login form.
  */
@@ -99,6 +72,9 @@ class Sign_In {
 			$wp->add_query_var( $var );
 		}
 
+error_log("init called, adding post handler"); // XXX remove
+		add_action( 'admin_post_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
+		add_action( 'admin_post_nopriv_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
 		add_filter( 'the_content', array( 'Sign_In', 'filter_protected_content' ) );
 	}
 
@@ -175,7 +151,7 @@ class Sign_In {
 		);
 		add_settings_field(
 			'aws_client_id',
-			__( 'AWS Client ID' ),
+			__( 'Cognito App Client ID' ),
 			'text_input_callback',
 			'sign_in_settings',
 			'aws_settings_section',
@@ -238,12 +214,14 @@ class Sign_In {
 	 */
 	private static function authenticate_user( $email, $password, $aws_opts ) {
 		if ( null === $email || null === $password ) {
+			error_log("No email or password: " . $email . ' ' . $password);
 			return null;
 		}
 
 		$client_id    = $aws_opts['client_id'] ?? null;
 		$user_pool_id = $aws_opts['user_pool_id'] ?? null;
 		if ( null === $client_id || null === $user_pool_id ) {
+			error_log("No client id or user pool id: " . $client_id . ' ' . $user_pool_id);
 			return null;
 		}
 
@@ -260,6 +238,7 @@ class Sign_In {
 			$users           = $result->get( 'Users' );
 			if ( count( $users ) === 0 ) {
 				echo '<script>console.error("No such user: ' . esc_js( $email ) . '")</script>';
+				error_log("No such user: " . $email);
 				return null;
 			}
 
@@ -277,6 +256,7 @@ class Sign_In {
 			$result    = $cognito->InitiateAuth( $auth_args );
 			return $result->get( 'AuthenticationResult' )['AccessToken'];
 		} catch ( Exception $e ) {
+			error_log("Authentication error: " . $e->getMessage());
 			echo '<script>console.error("Authenticating error: ' . esc_js( $e->getMessage() ) . '")</script>';
 			return null;
 		}
@@ -296,75 +276,46 @@ class Sign_In {
 		}
 
 		$aws_opts  = self::get_aws_opts( $shortcode );
-		$user_name = '';
-		$password  = '';
-		$login_msg = 'Please log in:';
 
-		switch ( self::get_filter_status( $aws_opts ) ) {
-			case FilterStatus::AUTHENTICATED:
+		error_log("filter_protected_content called");
+		echo '<b>DEBUG:</b><br>';
+		print_r($aws_opts); // XXX remove
+		echo '<hr>';
+		print_r($_POST); // XXX remove
+		echo '<b>end</b><hr>';
+
+		// check login status
+		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
+			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
+			if ( self::validate_token( $token, $aws_opts ) ) {
 				return self::render_authenticated_content( $shortcode, $content );
-
-			case FilterStatus::FORGOT_PASSWORD:
-				// Start password reset process.
-				$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
-				self::unset_cookie( USER_NAME_COOKIE_NAME );
-				self::unset_cookie( PASSWORD_RESET_COOKIE_NAME );
-
-				if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
-					if ( self::request_reset_password( $aws_opts, $user_name ) ) {
-						return self::render_password_reset( $content );
-					} else {
-						return self::render_unauthenticated_content( $content, 'Error sending password-reset code.' );
-					}
-				} else {
-					echo '<script>console.error("Invalid email: ' . esc_js( $user_name ) . '")</script>';
-					return self::render_unauthenticated_content( $content, 'Invalid user name. Try logging in again:' );
-				}
-
-			case FilterStatus::RESET_PASSWORD:
-				// Read the password reset code and new password, try to reset, then present login.
-				$user_name       = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
-				$password        = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
-				$validation_code = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_RESET_CODE_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
-				self::unset_cookie( USER_NAME_COOKIE_NAME );
-				self::unset_cookie( PASSWORD_RESET_COOKIE_NAME );
-				self::unset_cookie( PASSWORD_RESET_CODE_COOKIE_NAME );
-
-				if ( self::reset_password( $aws_opts, $user_name, $password, $validation_code ) ) {
-					$login_msg = 'Password reset successful. Please log in:';
-				} else {
-					$login_msg = 'Error resetting password. Please try again:';
-				}
-				return self::render_unauthenticated_content( $content, $login_msg );
-
-			case FilterStatus::AUTHENTICATION_PENDING:
-				// Try to authenticate user.
-				$user_name = urldecode( filter_var( wp_unslash( $_COOKIE[ USER_NAME_COOKIE_NAME ] ), FILTER_SANITIZE_EMAIL ) );
-				$password  = urldecode( filter_var( wp_unslash( $_COOKIE[ PASSWORD_COOKIE_NAME ] ), FILTER_UNSAFE_RAW ) );
-				self::unset_cookie( USER_NAME_COOKIE_NAME );
-				self::unset_cookie( PASSWORD_COOKIE_NAME );
-
-				$token = self::authenticate_user( $user_name, $password, $aws_opts );
-				if ( null !== $token ) {
-					setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-					$result = get_permalink( get_the_ID() );
-					wp_redirect( $result );
-					exit();
-				}
-				$login_msg = 'Invalid login';
-				// Fall through to unauthenticated case.
-
-			case FilterStatus::UNAUTHENTICATED:
-			default:
-				// Render login form with instruction or error message.
-				self::unset_cookie( AUTH_TOKEN_COOKIE_NAME );
-				if ( '' === $aws_opts['client_id'] ) {
-					$login_msg = 'Plugin not configured with AWS Client ID';
-				} elseif ( '' === $aws_opts['user_pool_id'] ) {
-					$login_msg = 'Plugin not configured with Cognito User Pool ID';
-				}
-				return self::render_unauthenticated_content( $content, $login_msg );
+			}
 		}
+
+		// not authenticated, determine error/welcome message.
+		$login_msg = 'Please log in:';
+		if (isset($_GET['login_msg'])) {
+			switch ($_GET['login_msg']) {
+				case 'server_authentication_failed': // XXX use constants
+					$login_msg = 'Login redirect failed. Please try again:';
+					break;
+				case 'password_incorrect':
+					$login_msg = 'User name or password incorrect.';
+					break;
+				case 'password_reset_successful':
+					$login_msg = 'Check your email for new password.'; // XXX it's a tmp password?
+					break;
+				case 'invalid_email':
+					$login_msg = 'Invalid email address.';
+					break;
+				default:
+					$login_msg = 'Please log in...';
+					break;
+			}
+		}
+
+		// XXX pass in aws_opts?
+		return self::render_unauthenticated_content( $content, $login_msg );
 	}
 
 	/**
@@ -419,43 +370,6 @@ class Sign_In {
 	}
 
 	/**
-	 * Get the current login state by inspecting cookies.
-	 *
-	 * @param object $aws_opts AWS configuration options used for authentication.
-	 *
-	 * @return FilterStatus the current login state.
-	 */
-	public static function get_filter_status( $aws_opts ): FilterStatus {
-		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
-			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
-			if ( self::validate_token( $token, $aws_opts ) ) {
-				return FilterStatus::AUTHENTICATED;
-			} else {
-				return FilterStatus::UNAUTHENTICATED;
-			}
-		}
-
-		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] )
-			&& isset( $_COOKIE[ PASSWORD_COOKIE_NAME ] )
-			&& isset( $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] ) ) {
-
-			return FilterStatus::RESET_PASSWORD;
-		}
-
-		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] )
-			&& isset( $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] ) ) {
-
-			return FilterStatus::FORGOT_PASSWORD;
-		}
-
-		if ( isset( $_COOKIE[ USER_NAME_COOKIE_NAME ] ) && isset( $_COOKIE[ PASSWORD_COOKIE_NAME ] ) ) {
-			return FilterStatus::AUTHENTICATION_PENDING;
-		}
-
-		return FilterStatus::UNAUTHENTICATED;
-	}
-
-	/**
 	 * Get Cognito Identity Provider client.
 	 *
 	 * @param object $aws_opts AWS configuration options used to create the client.
@@ -495,12 +409,77 @@ class Sign_In {
 		// don't trim the shortcode here, as we might need to wholesale replace/hide it in the webpage.
 		return $shortcode;
 	}
+	
+	public static function handle_login_post() {
+		error_log("handle_login_post called");
+		echo '<b>POST-DEBUG:</b><br>';
+		print_r($_POST);
+		print_r(parse_url( wp_get_referer() ));
+		echo '<b>END-POST-DEBUG:</b><hr>';
+
+		$url_parts = parse_url( wp_get_referer() );
+		$slug = $url_parts['path'];
+		if ( ! isset( $_POST['sign_in_auth_nonce'] ) 
+    		|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' ) 
+		) {
+error_log("nonce verification failed " . (string)isset( $_POST['sign_in_auth_nonce'] ) );
+			wp_redirect( $slug . '?login_msg=server_authentication_failed' );
+			exit("Login security check failed.");
+		}
+
+		$user_name = '';
+		if (isset($_POST['user_name'])) {
+			$user_name = sanitize_text_field( $_POST['user_name'] );
+		}
+		$forgot_password = null;
+		if (isset($_POST['password_forgot'])) {
+				$forgot_password = sanitize_text_field( $_POST['password_forgot'] );
+		}
+		$password = '';
+		if (isset($_POST['password'])) {
+				$password = sanitize_text_field( $_POST['password'] );
+		}
+error_log( $user_name . ' ' . $forgot_password . ' ' . $password ); // XXX remove
+
+		$aws_opts  = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
+		if ($forgot_password === 'yes') {
+			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
+				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
+error_log("password reset requested");
+					wp_redirect( $slug . '?login_msg=password_reset_requested' );
+					exit();
+				} else {
+error_log("password reset request failed");
+					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+					exit();
+				}
+			} else {
+error_log("invalid email for password reset: " . $user_name);
+				wp_redirect( $slug . '?login_msg=invalid_email' );
+				exit();
+			}
+		}
+
+		$token = self::authenticate_user( $user_name, $password, $aws_opts );
+		if ( null !== $token ) {
+			setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
+			wp_redirect( $slug );
+			exit();
+		} else {
+			error_log("login failed, redirecting to " . $slug . '?login_msg=password_incorrect');
+		}
+		wp_redirect( $slug . '?login_msg=password_incorrect' );
+	}
 
 	/**
 	 * Respond to plugin_activation events by writing default settings.
 	 */
 	public static function plugin_activation() {
 		$options = get_option( 'sign_in_settings' );
+		if ( false === $options ) {
+			$options = array();
+		}
+
 		if ( ! isset( $options['aws_credentials_path'] ) ) {
 			$options['aws_credentials_path'] = 'credentials';
 		}
@@ -560,8 +539,12 @@ class Sign_In {
 		?>
 <link rel="stylesheet" href="<?php echo esc_html( plugin_dir_url( __FILE__ ) . 'style.css' ); ?>" />
 <form class="sign-in-login"
-	onsubmit="wp_sign_in_handle_submit(event);"
-	action='<?php echo esc_html( get_permalink( get_the_ID() ) ); ?>'>
+	action='<?php echo admin_url( 'admin-post.php' ); ?>'
+	method='post'>
+
+	<input type="hidden" name="action" value="sign_in_auth" readonly />
+	<?php wp_nonce_field( 'sign_in_auth', 'sign_in_auth_nonce' ); ?>
+
 	<div class="sign-in-error"><b><?php echo esc_html( $error_msg ); ?></b></div>
 	<div class="sign-in-label-input-pair">
 		<label for="user_name_wp_sign_in">Email:</label>
@@ -610,30 +593,6 @@ class Sign_In {
 			const div = document.getElementById("password_div_wp_sign_in");
 			div.style.display = wp_sign_in_password_pair_display;
 		}
-	}
-
-	function wp_sign_in_handle_submit(event) {
-		event.preventDefault();
-		const form = event.target;
-		const user_name = form.user_name.value;
-		const password = form.password.value;
-		const reset = form.password_forgot.value;
-
-		const expiryDate = new Date();
-		expiryDate.setTime(expiryDate.getTime() + (<?php echo number_format( USER_NAME_EXPIRY_SECONDS ); ?> * 1000));
-		const expires = "expires=" + expiryDate.toUTCString();
-
-		document.cookie = "<?php echo esc_attr( USER_NAME_COOKIE_NAME ); ?>=" +
-			encodeURIComponent(user_name) + ";" + expires + ";path=/";
-		if (reset === "yes") {
-			document.cookie = "<?php echo esc_attr( PASSWORD_RESET_COOKIE_NAME ); ?>=" +
-				encodeURIComponent(<?php echo esc_attr( PASSWORD_RESET_COOKIE_VALUE ); ?>) +
-				";" + expires + ";path=/";
-		} else {
-			document.cookie = "<?php echo esc_attr( PASSWORD_COOKIE_NAME ); ?>=" +
-				encodeURIComponent(password) + ";" + expires + ";path=/";
-		}
-		window.location.href = form.action;
 	}
 </script>
 		<?php
