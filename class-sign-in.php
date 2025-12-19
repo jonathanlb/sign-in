@@ -278,11 +278,6 @@ error_log("init called, adding post handler"); // XXX remove
 		$aws_opts  = self::get_aws_opts( $shortcode );
 
 		error_log("filter_protected_content called");
-		echo '<b>DEBUG:</b><br>';
-		print_r($aws_opts); // XXX remove
-		echo '<hr>';
-		print_r($_POST); // XXX remove
-		echo '<b>end</b><hr>';
 
 		// check login status
 		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
@@ -415,10 +410,6 @@ error_log("init called, adding post handler"); // XXX remove
 	
 	public static function handle_login_post() {
 		error_log("handle_login_post called");
-		echo '<b>POST-DEBUG:</b><br>';
-		print_r($_POST);
-		print_r(parse_url( wp_get_referer() ));
-		echo '<b>END-POST-DEBUG:</b><hr>';
 
 		$url_parts = parse_url( wp_get_referer() );
 		$slug = $url_parts['path'];
