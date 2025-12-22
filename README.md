@@ -37,6 +37,14 @@ The only permission required is
 	]
 }
 ```
+- Make sure that the credentials file is not available to the public, e.g. the link `https://yourhost.me/wp-content/plugins/sign-in/credentials` , is not viewable. Options to protect the files might be to move the file elsewhere on your host or add the restriction to an `.htaccess`
+```
+<Files "credentials">
+    Order Allow,Deny
+    Deny from all
+</Files>
+```
+Failure to protect the credentials file will expose all the user information stored in Cognito to the world, but not the passwords to access your site.
 - Navigate your browser to your site's WordPress dashboard and activate the sign-in plugin.
 - From the WordPress dashboard, select "Settings -> sign-in"
   - Enter the security profile name for the AWS access key and secret when you created the AWS user.
