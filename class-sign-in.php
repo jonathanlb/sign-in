@@ -72,7 +72,6 @@ class Sign_In {
 			$wp->add_query_var( $var );
 		}
 
-error_log("init called, adding post handler"); // XXX remove
 		add_action( 'admin_post_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
 		add_action( 'admin_post_nopriv_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
 		add_filter( 'the_content', array( 'Sign_In', 'filter_protected_content' ) );
@@ -277,8 +276,6 @@ error_log("init called, adding post handler"); // XXX remove
 
 		$aws_opts  = self::get_aws_opts( $shortcode );
 
-		error_log("filter_protected_content called");
-
 		// check login status
 		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
 			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
@@ -298,7 +295,7 @@ error_log("init called, adding post handler"); // XXX remove
 					$login_msg = 'User name or password incorrect.';
 					break;
 				case 'password_reset_successful':
-					$login_msg = 'Check your email for new password.'; // XXX it's a tmp password?
+					$login_msg = 'Check your email for temporary password.';
 					break;
 				case 'invalid_email':
 					$login_msg = 'Invalid email address.';
@@ -409,14 +406,12 @@ error_log("init called, adding post handler"); // XXX remove
 	}
 	
 	public static function handle_login_post() {
-		error_log("handle_login_post called");
-
 		$url_parts = parse_url( wp_get_referer() );
 		$slug = $url_parts['path'];
 		if ( ! isset( $_POST['sign_in_auth_nonce'] ) 
     		|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' ) 
 		) {
-error_log("nonce verification failed " . (string)isset( $_POST['sign_in_auth_nonce'] ) );
+			echo '<script>console.error("nonce verification failed")</script>';
 			wp_redirect( $slug . '?login_msg=server_authentication_failed' );
 			exit("Login security check failed.");
 		}
@@ -437,7 +432,6 @@ error_log("nonce verification failed " . (string)isset( $_POST['sign_in_auth_non
 		if (isset($_POST['new_password'])) {
 				$new_password = sanitize_text_field( $_POST['new_password'] );
 		}
-error_log( $user_name . ' ' . $forgot_password . ' ' . $password . ' ' . $new_password ); // XXX remove
 
 		$aws_opts  = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
 		if ($new_password !== '') {
@@ -449,28 +443,27 @@ error_log( $user_name . ' ' . $forgot_password . ' ' . $password . ' ' . $new_pa
 					wp_redirect( $slug );
 					exit();
 				} else {
-					error_log("password reset failed");
+					echo '<script>console.error("password reset failed")</script>';
 					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
 					exit();
 				}
 			 } else {
-				error_log("invalid email for user password reset: " . $user_name);
+				echo '<script>console.error("invalid email for user password reset ' . esc_js( $user_name ) . '")</script>';
 				wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
 				exit();
 			}
 		} elseif ($forgot_password === 'yes') {
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
-error_log("password reset requested");
 					wp_redirect( $slug . '?login_msg=password_reset_requested' );
 					exit();
 				} else {
-error_log("password reset request failed");
+					echo '<script>console.error("password reset request failed")</script>';
 					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
 					exit();
 				}
 			} else {
-error_log("invalid email for password reset: " . $user_name);
+				echo '<script>console.error("invalid email for password reset ' . esc_js( $user_name ) . '	")</script>';
 				wp_redirect( $slug . '?login_msg=invalid_email' );
 				exit();
 			}
@@ -482,7 +475,7 @@ error_log("invalid email for password reset: " . $user_name);
 			wp_redirect( $slug );
 			exit();
 		} else {
-			error_log("login failed, redirecting to " . $slug . '?login_msg=password_incorrect');
+			echo '<script>console.error("login failed, redirecting to ' . esc_js( $slug ) . '?login_msg=password_incorrect")</script>';
 		}
 		wp_redirect( $slug . '?login_msg=password_incorrect' );
 	}

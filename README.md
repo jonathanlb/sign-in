@@ -6,6 +6,7 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
 ## Setup
 
 - Download the sign-in plugin to your plugins directory, e.g. `wp-content/plugins/sign-in`
+- From the `sign-in` install directory, run `composer update`
 - Create a AWS user pool and client id.
 ```
 aws cognito-idp create-user-pool --pool-name POOL_NAME \
