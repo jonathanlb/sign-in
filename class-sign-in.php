@@ -254,7 +254,7 @@ class Sign_In {
 			$result    = $cognito->InitiateAuth( $auth_args );
 			return $result->get( 'AuthenticationResult' )['AccessToken'];
 		} catch ( Exception $e ) {
-			error_log( 'Authentication error: ' . $e->getMessage() );
+			error_log( 'Authentication error: ' . $e->getMessage() . ' for user ' . $email );
 			return null;
 		}
 
