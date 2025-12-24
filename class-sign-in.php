@@ -213,14 +213,14 @@ class Sign_In {
 	 */
 	private static function authenticate_user( $email, $password, $aws_opts ) {
 		if ( null === $email || null === $password ) {
-			error_log("No email or password: " . $email . ' ' . $password);
+			error_log( 'No email or password: ' . $email . ' ' . $password );
 			return null;
 		}
 
 		$client_id    = $aws_opts['client_id'] ?? null;
 		$user_pool_id = $aws_opts['user_pool_id'] ?? null;
 		if ( null === $client_id || null === $user_pool_id ) {
-			error_log("No client id or user pool id: " . $client_id . ' ' . $user_pool_id);
+			error_log( 'No client id or user pool id: ' . $client_id . ' ' . $user_pool_id );
 			return null;
 		}
 
@@ -237,7 +237,7 @@ class Sign_In {
 			$users           = $result->get( 'Users' );
 			if ( count( $users ) === 0 ) {
 				echo '<script>console.error("No such user: ' . esc_js( $email ) . '")</script>';
-				error_log("No such user: " . $email);
+				error_log( 'No such user: ' . $email );
 				return null;
 			}
 
@@ -255,7 +255,7 @@ class Sign_In {
 			$result    = $cognito->InitiateAuth( $auth_args );
 			return $result->get( 'AuthenticationResult' )['AccessToken'];
 		} catch ( Exception $e ) {
-			error_log("Authentication error: " . $e->getMessage());
+			error_log( 'Authentication error: ' . $e->getMessage() );
 			echo '<script>console.error("Authenticating error: ' . esc_js( $e->getMessage() ) . '")</script>';
 			return null;
 		}
@@ -274,7 +274,7 @@ class Sign_In {
 			return $content;
 		}
 
-		$aws_opts  = self::get_aws_opts( $shortcode );
+		$aws_opts = self::get_aws_opts( $shortcode );
 
 		// check login status
 		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
@@ -286,8 +286,8 @@ class Sign_In {
 
 		// not authenticated, determine error/welcome message.
 		$login_msg = 'Please log in:';
-		if (isset($_GET['login_msg'])) {
-			switch ($_GET['login_msg']) {
+		if ( isset( $_GET['login_msg'] ) ) {
+			switch ( $_GET['login_msg'] ) {
 				case 'server_authentication_failed': // XXX use constants
 					$login_msg = 'Login redirect failed. Please try again:';
 					break;
@@ -404,37 +404,37 @@ class Sign_In {
 		// don't trim the shortcode here, as we might need to wholesale replace/hide it in the webpage.
 		return $shortcode;
 	}
-	
+
 	public static function handle_login_post() {
 		$url_parts = parse_url( wp_get_referer() );
-		$slug = $url_parts['path'];
-		if ( ! isset( $_POST['sign_in_auth_nonce'] ) 
-    		|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' ) 
+		$slug      = $url_parts['path'];
+		if ( ! isset( $_POST['sign_in_auth_nonce'] )
+			|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' )
 		) {
 			echo '<script>console.error("nonce verification failed")</script>';
 			wp_redirect( $slug . '?login_msg=server_authentication_failed' );
-			exit("Login security check failed.");
+			exit( 'Login security check failed.' );
 		}
 
 		$user_name = '';
-		if (isset($_POST['user_name'])) {
+		if ( isset( $_POST['user_name'] ) ) {
 			$user_name = sanitize_text_field( $_POST['user_name'] );
 		}
 		$forgot_password = null;
-		if (isset($_POST['password_forgot'])) {
+		if ( isset( $_POST['password_forgot'] ) ) {
 				$forgot_password = sanitize_text_field( $_POST['password_forgot'] );
 		}
 		$password = '';
-		if (isset($_POST['password'])) {
+		if ( isset( $_POST['password'] ) ) {
 				$password = sanitize_text_field( $_POST['password'] );
 		}
 		$new_password = '';
-		if (isset($_POST['new_password'])) {
+		if ( isset( $_POST['new_password'] ) ) {
 				$new_password = sanitize_text_field( $_POST['new_password'] );
 		}
 
-		$aws_opts  = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
-		if ($new_password !== '') {
+		$aws_opts = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
+		if ( $new_password !== '' ) {
 			// handle new password request
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::reset_password( $aws_opts, $user_name, $new_password, $password ) ) {
@@ -447,12 +447,12 @@ class Sign_In {
 					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
 					exit();
 				}
-			 } else {
+			} else {
 				echo '<script>console.error("invalid email for user password reset ' . esc_js( $user_name ) . '")</script>';
 				wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
 				exit();
 			}
-		} elseif ($forgot_password === 'yes') {
+		} elseif ( $forgot_password === 'yes' ) {
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
 					wp_redirect( $slug . '?login_msg=password_reset_requested' );
@@ -476,8 +476,9 @@ class Sign_In {
 			exit();
 		} else {
 			echo '<script>console.error("login failed, redirecting to ' . esc_js( $slug ) . '?login_msg=password_incorrect")</script>';
+			wp_redirect( $slug . '?login_msg=password_incorrect' );
+			exit();
 		}
-		wp_redirect( $slug . '?login_msg=password_incorrect' );
 	}
 
 	/**
@@ -552,7 +553,7 @@ class Sign_In {
 	method='post'>
 
 	<input type="hidden" name="action" value="sign_in_auth" readonly />
-	<?php wp_nonce_field( 'sign_in_auth', 'sign_in_auth_nonce' ); ?>
+		<?php wp_nonce_field( 'sign_in_auth', 'sign_in_auth_nonce' ); ?>
 
 	<div class="sign-in-error"><b><?php echo esc_html( $error_msg ); ?></b></div>
 	<div class="sign-in-label-input-pair">
@@ -568,7 +569,7 @@ class Sign_In {
 	</div>
 	<div class="sign-in-label-input-pair" id="password_div_wp_sign_in">
 		<label for="password_wp_sign_in">
-			<?php str_starts_with($error_msg, 'Password reset') ? esc_html_e( 'Temporary ', 'text-domain' ) : ''; ?>
+			<?php str_starts_with( $error_msg, 'Password reset' ) ? esc_html_e( 'Temporary ', 'text-domain' ) : ''; ?>
 			Password:</label>
 		<input
 			type="password"
@@ -579,7 +580,7 @@ class Sign_In {
 		/>
 	</div>
 
-	<?php if ( str_starts_with($error_msg, 'Password reset') ): ?> 
+		<?php if ( str_starts_with( $error_msg, 'Password reset' ) ) : ?> 
 		<div class="sign-in-label-input-pair" id="new_password_div_wp_sign_in">
 			<label for="new_password_wp_sign_in">New Password:</label>
 			<input
@@ -588,8 +589,8 @@ class Sign_In {
 				name="new_password"
 				value=""
 				minlength="8"
-        		pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*\W|_).{8,}"
-        		title="Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters"
+				pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*\W|_).{8,}"
+				title="Must contain at least one number, one uppercase and lowercase letter, one special character, and at least 8 or more characters"
 				required="required"
 				autocomplete="new-password"
 			/>
@@ -724,12 +725,12 @@ class Sign_In {
 			return true;
 		} catch ( Exception $e ) {
 			// e.g. user's email not verified
-			error_log("password reset error for " . $user_name . " : " . $e->getMessage());
+			error_log( 'password reset error for ' . $user_name . ' : ' . $e->getMessage() );
 			return false;
 		}
 	}
 
-	
+
 
 	/**
 	 * Perform password reset for user, given validation code and new password.
@@ -753,7 +754,7 @@ class Sign_In {
 			$cognito->confirmForgotPassword( $reset_opts );
 			return true;
 		} catch ( Exception $e ) {
-			error_log("password reset error: " . $user_name . " : " . $e->getMessage());
+			error_log( 'password reset error: ' . $user_name . ' : ' . $e->getMessage() );
 			return false;
 		}
 	}
