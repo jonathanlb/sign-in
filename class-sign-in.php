@@ -236,7 +236,6 @@ class Sign_In {
 			$result          = $cognito->ListUsers( $list_users_args );
 			$users           = $result->get( 'Users' );
 			if ( count( $users ) === 0 ) {
-				echo '<script>console.error("No such user: ' . esc_js( $email ) . '")</script>';
 				error_log( 'No such user: ' . $email );
 				return null;
 			}
@@ -256,7 +255,6 @@ class Sign_In {
 			return $result->get( 'AuthenticationResult' )['AccessToken'];
 		} catch ( Exception $e ) {
 			error_log( 'Authentication error: ' . $e->getMessage() );
-			echo '<script>console.error("Authenticating error: ' . esc_js( $e->getMessage() ) . '")</script>';
 			return null;
 		}
 
@@ -411,8 +409,7 @@ class Sign_In {
 		if ( ! isset( $_POST['sign_in_auth_nonce'] )
 			|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' )
 		) {
-			echo '<script>console.error("nonce verification failed")</script>';
-			wp_redirect( $slug . '?login_msg=server_authentication_failed' );
+			wp_redirect( $slug . '?login_msg=server_authentication_failed' , status: 302 , x_redirect_by: false );
 			exit( 'Login security check failed.' );
 		}
 
@@ -440,30 +437,26 @@ class Sign_In {
 				if ( self::reset_password( $aws_opts, $user_name, $new_password, $password ) ) {
 					$token = self::authenticate_user( $user_name, $new_password, $aws_opts );
 					setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-					wp_redirect( $slug );
+					wp_redirect( $slug , status: 302 , x_redirect_by: false );
 					exit();
 				} else {
-					echo '<script>console.error("password reset failed")</script>';
-					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+					wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
 					exit();
 				}
 			} else {
-				echo '<script>console.error("invalid email for user password reset ' . esc_js( $user_name ) . '")</script>';
-				wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+				wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
 				exit();
 			}
 		} elseif ( $forgot_password === 'yes' ) {
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
-					wp_redirect( $slug . '?login_msg=password_reset_requested' );
+					wp_redirect( $slug . '?login_msg=password_reset_requested' , status: 302 , x_redirect_by: false );
 					exit();
 				} else {
-					echo '<script>console.error("password reset request failed")</script>';
-					wp_redirect( $slug . '?login_msg=password_reset_request_failed' );
+					wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
 					exit();
 				}
 			} else {
-				echo '<script>console.error("invalid email for password reset ' . esc_js( $user_name ) . '	")</script>';
 				wp_redirect( $slug . '?login_msg=invalid_email' );
 				exit();
 			}
@@ -472,11 +465,10 @@ class Sign_In {
 		$token = self::authenticate_user( $user_name, $password, $aws_opts );
 		if ( null !== $token ) {
 			setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-			wp_redirect( $slug );
+			wp_redirect( $slug , status: 302 , x_redirect_by: false );
 			exit();
 		} else {
-			echo '<script>console.error("login failed, redirecting to ' . esc_js( $slug ) . '?login_msg=password_incorrect")</script>';
-			wp_redirect( $slug . '?login_msg=password_incorrect' );
+			wp_redirect( $slug . '?login_msg=password_incorrect' , status: 302 , x_redirect_by: false );
 			exit();
 		}
 	}
@@ -778,7 +770,7 @@ class Sign_In {
 				return true;
 			}
 		} catch ( Exception $e ) {
-			echo '<script>console.error("Invalid token: ' . esc_js( $e->getMessage() ) . '")</script>';
+			error_log( 'Invalid token: ' . $e->getMessage() );
 			return false;
 		}
 
