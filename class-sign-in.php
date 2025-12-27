@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.4
+ * @version    0.0.5
  * @since      0.0.1
  */
 
@@ -53,7 +53,7 @@ class Sign_In {
 	 *
 	 * @var string unused locally version number.
 	 */
-	private static $version = '0.0.3';
+	private static $version = '0.0.5';
 
 	/**
 	 * Initialize the plugin
@@ -70,7 +70,7 @@ class Sign_In {
 		add_action( 'admin_menu', array( 'Sign_In', 'admin_menu' ) );
 
 		global $wp;
-		$url_vars = array( 'password', 'token', 'user_name' );
+		$url_vars = array( SI_URL_LOGIN_KEY );
 		foreach ( $url_vars as $var ) {
 			$wp->add_query_var( $var );
 		}
