@@ -13,7 +13,6 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
 ```
 aws cognito-idp create-user-pool --pool-name POOL_NAME \
     --username-attributes "email" \
-    --username-attributes "email" \
     --query 'UserPool.Id'
 aws cognito-idp create-user-pool-client --user-pool-id POOL_NAME \
     --client-name CLIENT_NAME \
@@ -24,8 +23,7 @@ aws cognito-idp create-user-pool-client --user-pool-id POOL_NAME \
 ```
   - Enter the user pool and client ids on the Sign In Settings page.
   - If you're using the AWS web console, make sure that the client id has user-password authentication enabled.
-- Create an IAM user with permission to list users.  Download the user's AWS access key id and secret access key and save them in `wp-content/plugins/sign-in/credentials` .
-The only permission required is
+- Create an IAM user with permission to list users. The only permission required is
 ```
 {
 	"Version": "2012-10-17",
@@ -40,7 +38,13 @@ The only permission required is
 	]
 }
 ```
-- Make sure that the credentials file is not available to the public, e.g. the link `https://yourhost.me/wp-content/plugins/sign-in/credentials` , is not viewable. Options to protect the files might be to move the file elsewhere on your host or add the restriction to an `.htaccess`
+- Download the user's AWS access key id and secret access key and save them in `wp-content/plugins/sign-in/credentials` which will have the form
+```
+[your-profile-to-store-in-settings]
+aws_access_key_id=AKIAXYZ890
+aws_secret_access_key=asdfghjkl
+```
+- Make sure that the credentials file is not readable by the public, e.g. the link `https://yourhost.me/wp-content/plugins/sign-in/credentials` , is not viewable. Options to protect the files might be to move the file elsewhere on your host or add the restriction to an `.htaccess`
 ```
 <Files "credentials">
     Order Allow,Deny
