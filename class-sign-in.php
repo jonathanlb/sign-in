@@ -275,6 +275,13 @@ class Sign_In {
 			return $content;
 		}
 
+		// Prevent caching to respect login status.
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		} elseif ( ! DONOTCACHEPAGE ) {
+			error_log( 'sign-in: cannot prevent caching for ' . get_permalink() );
+		}
+
 		$aws_opts = self::get_aws_opts( $shortcode );
 
 		// check login status
