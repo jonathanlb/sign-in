@@ -17,14 +17,17 @@ define( 'LOGOUT_SHORTCODE', 'sign_in_logout' );
 define( 'SHORTCODE_PREFIX', 'sign_in_require_auth' );
 define( 'TOKEN_EXPIRY_SECONDS', 14000 );
 
-define( 'COOKIE_SALT', 'FwAlpiSjsb' );
-define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . COOKIE_SALT );
-define( 'PASSWORD_COOKIE_NAME', 'sign_in_password_' . COOKIE_SALT );
-define( 'PASSWORD_RESET_CODE_COOKIE_NAME', 'sign_in_validation_' . COOKIE_SALT );
-define( 'PASSWORD_RESET_COOKIE_NAME', 'sign_in_reset_password_' . COOKIE_SALT );
-define( 'PASSWORD_RESET_COOKIE_VALUE', COOKIE_SALT );
-define( 'USER_NAME_COOKIE_NAME', 'sign_in_user_name_' . COOKIE_SALT );
-define( 'USER_NAME_EXPIRY_SECONDS', 120 ); // just long enough to do the redirect after login form submission.
+define( 'SI_COOKIE_DOMAIN', parse_url( get_site_url() )['host'] );
+define( 'SI_COOKIE_PATH', '/' );
+define( 'SI_COOKIE_SALT', 'FwAlpiSjsb' );
+define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . SI_COOKIE_SALT );
+
+define( 'SI_URL_LOGIN_KEY', 'login_msg' );
+define( 'SI_LOGIN_INVALID_EMAIL', 'invalid_email' );
+define( 'SI_LOGIN_PASSWORD_INCORRECT', 'password_incorrect' );
+define( 'SI_LOGIN_PASSWORD_RESET_REQUEST', 'password_reset_requested' );
+define( 'SI_LOGIN_PASSWORD_RESET_SUCCESS', 'password_reset_success' );
+define( 'SI_LOGIN_SERVER_AUTHENTICATION_FAILED', 'server_authentication_failed' );
 
 /**
  * Handle AWS configuration, user validation, and replacing
@@ -284,21 +287,21 @@ class Sign_In {
 
 		// not authenticated, determine error/welcome message.
 		$login_msg = 'Please log in:';
-		if ( isset( $_GET['login_msg'] ) ) {
-			switch ( $_GET['login_msg'] ) {
-				case 'server_authentication_failed': // XXX use constants
+		if ( isset( $_GET[ SI_URL_LOGIN_KEY ] ) ) {
+			switch ( $_GET[ SI_URL_LOGIN_KEY ] ) {
+				case SI_LOGIN_SERVER_AUTHENTICATION_FAILED:
 					$login_msg = 'Login redirect failed. Please try again:';
 					break;
-				case 'password_incorrect':
+				case SI_LOGIN_PASSWORD_INCORRECT:
 					$login_msg = 'User name or password incorrect.';
 					break;
-				case 'password_reset_successful':
+				case SI_LOGIN_PASSWORD_RESET_SUCCESS:
 					$login_msg = 'Check your email for temporary password.';
 					break;
-				case 'invalid_email':
+				case SI_LOGIN_INVALID_EMAIL:
 					$login_msg = 'Invalid email address.';
 					break;
-				case 'password_reset_requested':
+				case SI_LOGIN_PASSWORD_RESET_REQUEST:
 					$login_msg = 'Password reset requested. Check your email for the reset code.';
 					break;
 				default:
@@ -409,7 +412,8 @@ class Sign_In {
 		if ( ! isset( $_POST['sign_in_auth_nonce'] )
 			|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' )
 		) {
-			wp_redirect( $slug . '?login_msg=server_authentication_failed' , status: 302 , x_redirect_by: false );
+			error_log( 'login failed nonce check' );
+			wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=' . SI_LOGIN_SERVER_AUTHENTICATION_FAILED, status: 302, x_redirect_by: false );
 			exit( 'Login security check failed.' );
 		}
 
@@ -436,39 +440,50 @@ class Sign_In {
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::reset_password( $aws_opts, $user_name, $new_password, $password ) ) {
 					$token = self::authenticate_user( $user_name, $new_password, $aws_opts );
-					setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-					wp_redirect( $slug , status: 302 , x_redirect_by: false );
+					if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) { // XXX be strategic
+						error_log( 'Failed to set cookie during password reset for user ' . $user_name );
+					}
+					wp_redirect( $slug, status: 302, x_redirect_by: false );
 					exit();
 				} else {
-					wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
+					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 					exit();
 				}
 			} else {
-				wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
+				wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 				exit();
 			}
 		} elseif ( $forgot_password === 'yes' ) {
+			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
+				error_log( 'Failed to reset cookie during password reset request for user ' . $user_name );
+			}
+
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
-					wp_redirect( $slug . '?login_msg=password_reset_requested' , status: 302 , x_redirect_by: false );
+					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_requested', status: 302, x_redirect_by: false );
 					exit();
 				} else {
-					wp_redirect( $slug . '?login_msg=password_reset_request_failed' , status: 302 , x_redirect_by: false );
+					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 					exit();
 				}
 			} else {
-				wp_redirect( $slug . '?login_msg=invalid_email' );
+				wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=invalid_email' );
 				exit();
 			}
 		}
 
 		$token = self::authenticate_user( $user_name, $password, $aws_opts );
 		if ( null !== $token ) {
-			setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, '/' );
-			wp_redirect( $slug , status: 302 , x_redirect_by: false );
+			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) { // XXX be strategic
+				error_log( 'Failed to set cookie during authentication for user ' . $user_name );
+			}
+			wp_redirect( $slug, status: 302, x_redirect_by: false );
 			exit();
 		} else {
-			wp_redirect( $slug . '?login_msg=password_incorrect' , status: 302 , x_redirect_by: false );
+			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
+				error_log( 'Failed to reset cookie during failed authentication for user ' . $user_name );
+			}
+			wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_incorrect', status: 302, x_redirect_by: false );
 			exit();
 		}
 	}
@@ -651,8 +666,6 @@ class Sign_In {
 				event.preventDefault();
 				const form = event.target;
 				document.cookie = "<?php echo esc_attr( AUTH_TOKEN_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
-				document.cookie = "<?php echo esc_attr( USER_NAME_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
-				document.cookie = "<?php echo esc_attr( PASSWORD_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
 				window.location.href = form.action;
 			}
 		</script>
