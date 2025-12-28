@@ -655,6 +655,7 @@ class Sign_In {
 			div = document.getElementById("login_button_wp_sign_in");
 			if (div) {
 				div.value = "Request Password Reset";
+				div.textContent = "Request Password Reset";
 			}
 		} else {
 			checkbox.value = "no";
@@ -669,6 +670,7 @@ class Sign_In {
 			div = document.getElementById("login_button_wp_sign_in");
 			if (div) {
 				div.value = "Log In";
+				div.textContent = "Log In";
 			}
 		}
 	}
