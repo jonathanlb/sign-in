@@ -635,7 +635,7 @@ class Sign_In {
 		<hr>
 		<i>A password reset code will be sent to your email.</i>
 	</div>
-		<input type="submit" value="Log In" />
+		<input id="login_button_wp_sign_in" type="submit" value="Log In" />
 </form>
 <script>
 	let wp_sign_in_password_pair_display = "flex";
@@ -651,6 +651,11 @@ class Sign_In {
 			if (div) {
 				div.style.display = "none";
 			}
+
+			div = document.getElementById("login_button_wp_sign_in");
+			if (div) {
+				div.value = "Request Password Reset";
+			}
 		} else {
 			checkbox.value = "no";
 			let div = document.getElementById("password_div_wp_sign_in");
@@ -659,6 +664,11 @@ class Sign_In {
 			div = document.getElementById("new_password_div_wp_sign_in");
 			if (div) {
 				div.style.display = "none";
+			}
+
+			div = document.getElementById("login_button_wp_sign_in");
+			if (div) {
+				div.value = "Log In";
 			}
 		}
 	}
