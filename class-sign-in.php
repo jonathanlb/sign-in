@@ -77,6 +77,8 @@ class Sign_In {
 
 		add_action( 'admin_post_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
 		add_action( 'admin_post_nopriv_sign_in_auth', array( 'Sign_In', 'handle_login_post' ) );
+		add_action( 'admin_post_sign_in_logout', array( 'Sign_In', 'handle_logout_post' ) );
+		add_action( 'admin_post_nopriv_sign_in_logout', array( 'Sign_In', 'handle_logout_post' ) );
 		add_filter( 'the_content', array( 'Sign_In', 'filter_protected_content' ) );
 	}
 
@@ -495,6 +497,16 @@ class Sign_In {
 		}
 	}
 
+	public static function handle_logout_post() {
+		$url_parts = parse_url( wp_get_referer() );
+		$slug      = $url_parts['path'];
+		if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
+			error_log( 'Failed to reset cookie during logout for user ' . $_POST['user_name'] );
+		}
+		wp_redirect( $slug, status: 302, x_redirect_by: false );
+		exit();
+	}
+
 	/**
 	 * Respond to plugin_activation events by writing default settings.
 	 */
@@ -664,18 +676,12 @@ class Sign_In {
 		ob_start();
 		?>
 		<form class="sign-in-logout-form"
-			onsubmit="wp_sign_out_handle_submit(event);"
-			action='<?php echo esc_html( get_permalink( get_the_ID() ) ); ?>'>
+			action='<?php echo admin_url( 'admin-post.php' ); ?>'
+			method='post'>
+
+			<input type="hidden" name="action" value="sign_in_logout" readonly />
 			<input type="submit" value="Log Out" />
 		</form>
-		<script>
-			function wp_sign_out_handle_submit(event) {
-				event.preventDefault();
-				const form = event.target;
-				document.cookie = "<?php echo esc_attr( AUTH_TOKEN_COOKIE_NAME ); ?>=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/";
-				window.location.href = form.action;
-			}
-		</script>
 		<?php
 		return ob_get_clean();
 	}
