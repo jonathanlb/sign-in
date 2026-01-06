@@ -266,7 +266,7 @@ class Sign_In {
 	/**
 	 * Remove a cookie's value by writing an empty, expired value.
 	 *
-	 * @param string $cookie_name The key for the cookie to overwrite
+	 * @param string $cookie_name The key for the cookie to overwrite.
 	 */
 	public static function clear_cookie( $cookie_name ) {
 		if ( ! setcookie( $cookie_name, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
@@ -456,7 +456,7 @@ class Sign_In {
 	public static function handle_login_post() {
 		$slug = self::get_referring_url( wp_get_referer() );
 		if ( ! isset( $_POST['sign_in_auth_nonce'] )
-			|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' )
+			|| ! wp_verify_nonce( sanitize_key( $_POST['sign_in_auth_nonce'] ), 'sign_in_auth' )
 		) {
 			wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=' . SI_LOGIN_SERVER_AUTHENTICATION_FAILED, status: 302, x_redirect_by: false );
 			exit( 'Login security check failed.' );
