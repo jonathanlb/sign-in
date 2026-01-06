@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.4
+ * @version    0.5.1
  * @since      0.0.2
  */
 
@@ -132,39 +132,21 @@ class Sign_In_Test extends WP_UnitTestCase {
 		$this->assertEquals( 'custom', $opts['user_pool_id'] );
 	}
 
-	public function test_filter_status_non_authenticated(): void {
-		$aws_opts = Sign_In::get_aws_opts( 'sign_in_require_auth' );
-		$status   = Sign_In::get_filter_status( $aws_opts );
-		$this->assertEquals( FilterStatus::UNAUTHENTICATED, $status );
+	/**
+	 * Ensure that referring URL preserves arguments not related to sign-in.
+	 */
+	public function test_preserves_url_arguments(): void {
+		$original_url = 'https://example.com/somepage?foo=bar&baz=qux';
+		$referer      = Sign_In::get_referring_url( $original_url );
+		$this->assertEquals( '/somepage?foo=bar&baz=qux', $referer );
 	}
 
-	public function test_filter_status_forgot_password(): void {
-		$aws_opts                              = Sign_In::get_aws_opts( 'sign_in_require_auth' );
-		$_COOKIE[ USER_NAME_COOKIE_NAME ]      = 'testuser';
-		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = PASSWORD_RESET_COOKIE_VALUE;
-		$status                                = Sign_In::get_filter_status( $aws_opts );
-		$this->assertEquals( FilterStatus::FORGOT_PASSWORD, $status );
-		$this->assertEquals( 'testuser', $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-	}
-
-	public function test_filter_status_reset_password(): void {
-		$aws_opts                              = Sign_In::get_aws_opts( 'sign_in_require_auth' );
-		$_COOKIE[ USER_NAME_COOKIE_NAME ]      = 'testuser';
-		$_COOKIE[ PASSWORD_COOKIE_NAME ]       = 'abc123';
-		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = '123456';
-		$status                                = Sign_In::get_filter_status( $aws_opts );
-		$this->assertEquals( FilterStatus::RESET_PASSWORD, $status );
-		$this->assertEquals( 'testuser', $_COOKIE[ USER_NAME_COOKIE_NAME ] );
-		$this->assertEquals( 'abc123', $_COOKIE[ PASSWORD_COOKIE_NAME ] );
-		$this->assertEquals( '123456', $_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] );
-	}
-
-	public function test_filter_status_authentication_pending(): void {
-		$aws_opts                              = Sign_In::get_aws_opts( 'sign_in_require_auth' );
-		$_COOKIE[ USER_NAME_COOKIE_NAME ]      = 'testuser';
-		$_COOKIE[ PASSWORD_COOKIE_NAME ]       = 'abc123';
-		$_COOKIE[ PASSWORD_RESET_COOKIE_NAME ] = null;
-		$status                                = Sign_In::get_filter_status( $aws_opts );
-		$this->assertEquals( FilterStatus::AUTHENTICATION_PENDING, $status );
+	/**
+	 * Ensure that referring URL removes sign-in related arguments.
+	 */
+	public function test_removes_signin_url_arguments(): void {
+		$original_url = 'https://example.com/somepage?foo=bar&login_msg=foo_bar_baz&baz=qux';
+		$referer      = Sign_In::get_referring_url( $original_url );
+		$this->assertEquals( '/somepage?foo=bar&baz=qux', $referer );
 	}
 }

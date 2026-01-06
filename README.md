@@ -5,6 +5,7 @@ Protect WordPress content behind a shortcode tag and authenticate using AWS Cogn
 
 ## Installation
 
+- Change the caching settings in your WordPress site so that *web pages* are not cached.  Assets are OK, but rendering a stale page could provide unauthorized access to a user or render an eternal login dialog.
 - Download the sign-in plugin to your plugins directory, e.g. `wp-content/plugins/sign-in`
 - From the `sign-in` install directory, run `composer update`
 

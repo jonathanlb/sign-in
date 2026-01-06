@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.5
+ * @version    0.5.1
  * @since      0.0.1
  */
 
@@ -17,7 +17,7 @@ define( 'LOGOUT_SHORTCODE', 'sign_in_logout' );
 define( 'SHORTCODE_PREFIX', 'sign_in_require_auth' );
 define( 'TOKEN_EXPIRY_SECONDS', 14000 );
 
-define( 'SI_COOKIE_DOMAIN', parse_url( get_site_url() )['host'] );
+define( 'SI_COOKIE_DOMAIN', wp_parse_url( get_site_url() )['host'] );
 define( 'SI_COOKIE_PATH', '/' );
 define( 'SI_COOKIE_SALT', 'FwAlpiSjsb' );
 define( 'AUTH_TOKEN_COOKIE_NAME', 'sign_in_auth_token_' . SI_COOKIE_SALT );
@@ -53,7 +53,7 @@ class Sign_In {
 	 *
 	 * @var string unused locally version number.
 	 */
-	private static $version = '0.0.5';
+	private static $version = '0.5.1';
 
 	/**
 	 * Initialize the plugin
@@ -218,14 +218,12 @@ class Sign_In {
 	 */
 	private static function authenticate_user( $email, $password, $aws_opts ) {
 		if ( null === $email || null === $password ) {
-			error_log( 'No email or password: ' . $email . ' ' . $password );
 			return null;
 		}
 
 		$client_id    = $aws_opts['client_id'] ?? null;
 		$user_pool_id = $aws_opts['user_pool_id'] ?? null;
 		if ( null === $client_id || null === $user_pool_id ) {
-			error_log( 'No client id or user pool id: ' . $client_id . ' ' . $user_pool_id );
 			return null;
 		}
 
@@ -241,7 +239,6 @@ class Sign_In {
 			$result          = $cognito->ListUsers( $list_users_args );
 			$users           = $result->get( 'Users' );
 			if ( count( $users ) === 0 ) {
-				error_log( 'No such user: ' . $email );
 				return null;
 			}
 
@@ -267,6 +264,17 @@ class Sign_In {
 	}
 
 	/**
+	 * Remove a cookie's value by writing an empty, expired value.
+	 *
+	 * @param string $cookie_name The key for the cookie to overwrite
+	 */
+	public static function clear_cookie( $cookie_name ) {
+		if ( ! setcookie( $cookie_name, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
+			error_log( 'Failed to reset cookie during password reset request for user ' . $user_name );
+		}
+	}
+
+	/**
 	 * Remove Filter protected content.
 	 *
 	 * @param string $content the post content.
@@ -286,7 +294,7 @@ class Sign_In {
 
 		$aws_opts = self::get_aws_opts( $shortcode );
 
-		// check login status
+		// check login status.
 		if ( isset( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ) ) {
 			$token = filter_var( wp_unslash( $_COOKIE[ AUTH_TOKEN_COOKIE_NAME ] ), FILTER_UNSAFE_RAW );
 			if ( self::validate_token( $token, $aws_opts ) ) {
@@ -394,6 +402,31 @@ class Sign_In {
 	}
 
 	/**
+	 * Get the URL that flow should return to after a post.
+	 *
+	 * @param string $referer the raw referer URL, likely from wp_get_referer().
+	 * @return string The URL referring flow here, minus any of this plugin's
+	 * arguments and hostname to keep flow local.
+	 */
+	public static function get_referring_url( $referer ) {
+		$url_parts = wp_parse_url( $referer );
+		$params    = array();
+		$slug      = $url_parts['path'];
+
+		if ( isset( $url_parts['query'] ) ) {
+			parse_str( $url_parts['query'], $params );
+		}
+		$i = 0;
+		foreach ( $params as $key => $value ) {
+			if ( SI_URL_LOGIN_KEY !== $key ) {
+				$slug = $slug . ( ( $i ? '&' : '?' ) . $key . '=' . $value );
+				++$i;
+			}
+		}
+		return $slug;
+	}
+
+	/**
 	 * Extract shortcode from content.
 	 * Does not include surrounding [ and ], but does include the shortcode itself and preceeding and trailing whitespace.
 	 *
@@ -415,95 +448,91 @@ class Sign_In {
 		return $shortcode;
 	}
 
+	/**
+	 * Check the posted username, password, request-password request and redirect back to the
+	 * referring page with either an access token, a signal to accept a temporary password and reset,
+	 * or error.
+	 */
 	public static function handle_login_post() {
-		$url_parts = parse_url( wp_get_referer() );
-		$slug      = $url_parts['path'];
+		$slug = self::get_referring_url( wp_get_referer() );
 		if ( ! isset( $_POST['sign_in_auth_nonce'] )
 			|| ! wp_verify_nonce( $_POST['sign_in_auth_nonce'], 'sign_in_auth' )
 		) {
-			error_log( 'login failed nonce check' );
-			wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=' . SI_LOGIN_SERVER_AUTHENTICATION_FAILED, status: 302, x_redirect_by: false );
+			wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=' . SI_LOGIN_SERVER_AUTHENTICATION_FAILED, status: 302, x_redirect_by: false );
 			exit( 'Login security check failed.' );
 		}
 
 		$user_name = '';
 		if ( isset( $_POST['user_name'] ) ) {
-			$user_name = sanitize_text_field( $_POST['user_name'] );
+			$user_name = sanitize_text_field( wp_unslash( $_POST['user_name'] ) );
 		}
 		$forgot_password = null;
 		if ( isset( $_POST['password_forgot'] ) ) {
-				$forgot_password = sanitize_text_field( $_POST['password_forgot'] );
+				$forgot_password = sanitize_text_field( wp_unslash( $_POST['password_forgot'] ) );
 		}
 		$password = '';
 		if ( isset( $_POST['password'] ) ) {
-				$password = sanitize_text_field( $_POST['password'] );
+				$password = sanitize_text_field( wp_unslash( $_POST['password'] ) );
 		}
 		$new_password = '';
 		if ( isset( $_POST['new_password'] ) ) {
-				$new_password = sanitize_text_field( $_POST['new_password'] );
+				$new_password = sanitize_text_field( wp_unslash( $_POST['new_password'] ) );
 		}
 
 		$aws_opts = self::get_aws_opts( '' ); // XXX how to pass in options from post? nonce?
-		if ( $new_password !== '' ) {
-			// handle new password request
+		if ( '' !== $new_password ) {
+			// Handle the new password request.
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::reset_password( $aws_opts, $user_name, $new_password, $password ) ) {
 					$token = self::authenticate_user( $user_name, $new_password, $aws_opts );
-					if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) { // XXX be strategic
-						error_log( 'Failed to set cookie during password reset for user ' . $user_name );
-					}
-					wp_redirect( $slug, status: 302, x_redirect_by: false );
+					self::write_cookie( AUTH_TOKEN_COOKIE_NAME, $token );
+					wp_safe_redirect( $slug, status: 302, x_redirect_by: false );
 					exit();
 				} else {
-					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
+					wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 					exit();
 				}
 			} else {
-				wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
+				wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 				exit();
 			}
-		} elseif ( $forgot_password === 'yes' ) {
-			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
-				error_log( 'Failed to reset cookie during password reset request for user ' . $user_name );
-			}
-
+		} elseif ( 'yes' === $forgot_password ) {
+			self::clear_cookie( AUTH_TOKEN_COOKIE_NAME );
 			if ( filter_var( $user_name, FILTER_VALIDATE_EMAIL ) ) {
 				if ( self::request_reset_password( $aws_opts, $user_name ) ) {
-					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_requested', status: 302, x_redirect_by: false );
+					wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_requested', status: 302, x_redirect_by: false );
 					exit();
 				} else {
-					wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
+					wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_reset_request_failed', status: 302, x_redirect_by: false );
 					exit();
 				}
 			} else {
-				wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=invalid_email' );
+				wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=invalid_email' );
 				exit();
 			}
 		}
 
 		$token = self::authenticate_user( $user_name, $password, $aws_opts );
 		if ( null !== $token ) {
-			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) { // XXX be strategic
+			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, $token, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
 				error_log( 'Failed to set cookie during authentication for user ' . $user_name );
 			}
-			wp_redirect( $slug, status: 302, x_redirect_by: false );
+			wp_safe_redirect( $slug, status: 302, x_redirect_by: false );
 			exit();
 		} else {
-			if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
-				error_log( 'Failed to reset cookie during failed authentication for user ' . $user_name );
-			}
-			wp_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_incorrect', status: 302, x_redirect_by: false );
+			self::clear_cookie( AUTH_TOKEN_COOKIE_NAME );
+			wp_safe_redirect( $slug . '?' . SI_URL_LOGIN_KEY . '=password_incorrect', status: 302, x_redirect_by: false );
 			exit();
 		}
 	}
 
+	/**
+	 * Clear the authentication cookie and redirect the reader back to the referring page.
+	 */
 	public static function handle_logout_post() {
-		$url_parts = parse_url( wp_get_referer() );
-		$slug      = $url_parts['path'];
-		if ( ! setcookie( AUTH_TOKEN_COOKIE_NAME, '', time() - TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
-			error_log( 'Failed to reset cookie during logout for user ' . $_POST['user_name'] );
-		}
-		wp_redirect( $slug, status: 302, x_redirect_by: false );
+		$slug = self::get_referring_url( wp_get_referer() );
+		self::clear_cookie( AUTH_TOKEN_COOKIE_NAME );
+		wp_safe_redirect( $slug, status: 302, x_redirect_by: false );
 		exit();
 	}
 
@@ -575,7 +604,7 @@ class Sign_In {
 		?>
 <link rel="stylesheet" href="<?php echo esc_html( plugin_dir_url( __FILE__ ) . 'style.css' ); ?>" />
 <form class="sign-in-login"
-	action='<?php echo admin_url( 'admin-post.php' ); ?>'
+	action='<?php echo esc_html( admin_url( 'admin-post.php' ) ); ?>'
 	method='post'>
 
 	<input type="hidden" name="action" value="sign_in_auth" readonly />
@@ -688,7 +717,7 @@ class Sign_In {
 		ob_start();
 		?>
 		<form class="sign-in-logout-form"
-			action='<?php echo admin_url( 'admin-post.php' ); ?>'
+			action='<?php echo esc_html( admin_url( 'admin-post.php' ) ); ?>'
 			method='post'>
 
 			<input type="hidden" name="action" value="sign_in_logout" readonly />
@@ -754,7 +783,7 @@ class Sign_In {
 			$cognito->forgotPassword( $reset_opts );
 			return true;
 		} catch ( Exception $e ) {
-			// e.g. user's email not verified
+			// e.g. The user's email not verified.
 			error_log( 'password reset error for ' . $user_name . ' : ' . $e->getMessage() );
 			return false;
 		}
@@ -813,5 +842,17 @@ class Sign_In {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Write a cookie for the appropriate domain and expiration times.
+	 *
+	 * @param string $cookie_name The key for the cookie.
+	 * @param string $value The new value for the cookie.
+	 */
+	public static function write_cookie( $cookie_name, $value ) {
+		if ( ! setcookie( $cookie_name, $value, time() + TOKEN_EXPIRY_SECONDS, SI_COOKIE_PATH, SI_COOKIE_DOMAIN ) ) {
+			error_log( 'Failed to set cookie' );
+		}
 	}
 }

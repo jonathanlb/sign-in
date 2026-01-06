@@ -6,14 +6,14 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.0.5
+ * @version    0.5.1
  */
 
 /*
 Plugin Name: sign-in
 Plugin URI: https://github.com/jonathanlb/sign-in
 Description: Provide authenticated access to WP content.
-Version: 0.0.5
+Version: 0.5.1
 Author: Jonathan Bredin
 Author URI: https://bredin.org
 License: https://www.gnu.org/licenses/gpl-3.0.txt GPLv3
