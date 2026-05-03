@@ -6,7 +6,7 @@
  * @author     Jonathan Bredin <bredin@acm.org>
  * @license    https://www.gnu.org/licenses/gpl-3.0.txt GNU/GPLv3
  * @link       https://github.com/jonathanlb/sign-in
- * @version    0.5.1
+ * @version    0.5.2
  * @since      0.0.2
  */
 

@@ -7,6 +7,6 @@
     "test": "wp-env run tests-cli --env-cwd=wp-content/plugins/sign-in ./vendor/bin/phpunit tests/Sign_In_Test.php"
   },
   "devDependencies": {
-    "@wordpress/env": "^10.32.0"
+    "@wordpress/env": "^11.5.0"
   }
 }
