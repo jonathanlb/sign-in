@@ -1,6 +1,6 @@
 {
   "require": {
-    "aws/aws-sdk-php": "3.354.*"
+    "aws/aws-sdk-php": "3.379.*"
   },
   "require-dev": {
     "phpunit/phpunit": "^9.6",
