@@ -624,8 +624,8 @@ class Sign_In {
 	</div>
 	<div class="sign-in-label-input-pair" id="password_div_wp_sign_in">
 		<label for="password_wp_sign_in">
-			<?php str_starts_with( $error_msg, 'Password reset' ) ? esc_html_e( 'Temporary ', 'text-domain' ) : ''; ?>
-			Password:</label>
+			<?php str_starts_with( $error_msg, 'Password reset' ) ? esc_html_e( 'Validation code from email:', 'text-domain' ) : esc_html_e( 'Password', 'text-domain' ); ?>
+			</label>
 		<input
 			type="password"
 			id="password_wp_sign_in"
@@ -637,7 +637,7 @@ class Sign_In {
 
 		<?php if ( str_starts_with( $error_msg, 'Password reset' ) ) : ?> 
 		<div class="sign-in-label-input-pair" id="new_password_div_wp_sign_in">
-			<label for="new_password_wp_sign_in">New Password:</label>
+			<label for="new_password_wp_sign_in">Choose a new password:</label>
 			<input
 				type="password"
 				id="new_password_wp_sign_in"
@@ -662,7 +662,7 @@ class Sign_In {
 			onchange="wp_sign_in_handle_password_forgot_change(this)"
 		/>
 		<hr>
-		<i>A password reset code will be sent to your email.</i>
+		<i>A password reset code will be sent to your email if it is registered.</i>
 	</div>
 		<input id="login_button_wp_sign_in" type="submit" value="Log In" />
 </form>
